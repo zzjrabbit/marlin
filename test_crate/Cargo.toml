@@ -1,0 +1,13 @@
+[package]
+name = "test_crate"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[build-dependencies]
+snafu.workspace = true
+verilator = { path = "../verilator/" }
