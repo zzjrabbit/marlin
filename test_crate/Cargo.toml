@@ -8,6 +8,9 @@ description.workspace = true
 readme.workspace = true
 license.workspace = true
 
-[build-dependencies]
+[dependencies]
 snafu.workspace = true
 verilator = { path = "../verilator/" }
+
+libloading = "0.8.6"
+libc = "0.2.169"
