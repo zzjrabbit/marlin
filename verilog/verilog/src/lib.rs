@@ -1,5 +1,6 @@
 pub mod __reexports {
     pub use libc;
+    pub use libloading;
     pub use verilator;
 }
 

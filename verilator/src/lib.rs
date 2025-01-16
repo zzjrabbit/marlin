@@ -12,9 +12,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this project. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{fmt::Write, fs, process::Command};
+use std::{collections::HashMap, fmt::Write, fs, process::Command};
 
 use camino::{Utf8Path, Utf8PathBuf};
+use libloading::Library;
 use snafu::{prelude::*, Whatever};
 
 pub mod types {
@@ -43,16 +44,81 @@ pub mod types {
     pub type WData = EData;
 }
 
-// hardcoded knowledge:
-// - output library is obj_dir/libV${top_module}.a
-// - location of verilated.h
-// - verilator library is obj_dir/libverilated.a
-
 pub enum PortDirection {
     Input,
     Output,
     Inout,
 }
+
+pub trait VerilatedModel {
+    fn name() -> &'static str;
+
+    fn ports() -> &'static [(&'static str, usize, usize, PortDirection)];
+
+    fn init_from(library: &Library) -> Self;
+}
+
+pub struct VerilatorRuntime {
+    artifact_directory: Utf8PathBuf,
+    source_files: Vec<Utf8PathBuf>,
+    /// Mapping between hardware tops and Verilator implementations
+    libraries: HashMap<String, Library>,
+}
+
+impl VerilatorRuntime {
+    pub fn new(
+        artifact_directory: &Utf8Path,
+        source_files: &[&Utf8Path],
+    ) -> Self {
+        Self {
+            artifact_directory: artifact_directory.to_owned(),
+            source_files: source_files
+                .into_iter()
+                .map(|path| path.to_path_buf())
+                .collect(),
+            libraries: HashMap::new(),
+        }
+    }
+
+    // function name needs some work
+    /// Constructs a new model. Incrementally builds the Verilated model library
+    /// only once.
+    pub fn create_model<M: VerilatedModel>(&mut self) -> Result<M, Whatever> {
+        if !self.libraries.contains_key(M::name()) {
+            let local_artifacts_directory =
+                self.artifact_directory.join(M::name());
+
+            fs::create_dir_all(&local_artifacts_directory)
+                .whatever_context("Failed to create artifacts directory")?;
+
+            let source_files = self
+                .source_files
+                .iter()
+                .map(|path_buf| path_buf.as_str())
+                .collect::<Vec<_>>();
+            let library_path = build(
+                &source_files,
+                M::name(),
+                M::ports(),
+                &local_artifacts_directory,
+            )
+            .whatever_context("Failed to build verilator dynamic library")?;
+
+            let library = unsafe { Library::new(library_path) }
+                .whatever_context("Failed to load verilator dynamic library")?;
+            self.libraries.insert(M::name().to_string(), library);
+        }
+
+        let library = self.libraries.get(M::name()).unwrap();
+
+        Ok(M::init_from(library))
+    }
+}
+
+// hardcoded knowledge:
+// - output library is obj_dir/libV${top_module}.a
+// - location of verilated.h
+// - verilator library is obj_dir/libverilated.a
 
 fn build_ffi(
     artifact_directory: &Utf8Path,

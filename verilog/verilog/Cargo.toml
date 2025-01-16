@@ -12,3 +12,4 @@ license.workspace = true
 verilog-macro = { path = "../verilog-macro" }
 verilator = { path = "../../verilator/" }
 libc.workspace = true
+libloading.workspace = true

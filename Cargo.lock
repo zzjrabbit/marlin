@@ -376,6 +376,7 @@ name = "verilator"
 version = "0.1.0"
 dependencies = [
  "camino",
+ "libloading",
  "snafu",
 ]
 
@@ -384,6 +385,7 @@ name = "verilog"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "libloading",
  "verilator",
  "verilog-macro",
 ]

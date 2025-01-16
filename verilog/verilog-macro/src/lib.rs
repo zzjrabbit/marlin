@@ -135,9 +135,39 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let mut struct_members = vec![];
+
     let mut preeval_impl = vec![];
     let mut posteval_impl = vec![];
+
     let mut other_impl = vec![];
+
+    let mut verilated_model_ports_impl = vec![];
+    let mut verilated_model_init_impl = vec![];
+    let mut verilated_model_init_self = vec![];
+
+    let top_name = args.name;
+    verilated_model_init_impl.push(quote! {
+        let new_model: extern "C" fn() -> *mut libc::c_void =
+            *unsafe { library.get(concat!("ffi_new_V", #top_name).as_bytes()) }
+                .expect("failed to get symbol");
+        let model = (new_model)();
+
+
+        let delete_model: extern "C" fn(*mut libc::c_void) =
+            *unsafe { library.get(concat!("ffi_delete_V", #top_name).as_bytes()) }
+                .expect("failed to get symbol");
+
+        let eval_model: extern "C" fn(*mut libc::c_void) =
+            *unsafe { library.get(concat!("ffi_V", #top_name, "_eval").as_bytes()) }
+                .expect("failed to get symbol");
+    });
+    verilated_model_init_self.push(quote! {
+        drop_model: delete_model,
+        eval_model,
+        model,
+        _phantom: std::marker::PhantomData
+    });
+
     for (_, port) in port_declarations_list.contents() {
         match port {
             sv::AnsiPortDeclaration::Net(net) => {
@@ -163,18 +193,22 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                 };
 
                 let port_dimensions = &net.nodes.2;
-                let port_width = match port_dimensions.len() {
-                    0 => 1,
+                let (port_msb, port_lsb) = match port_dimensions.len() {
+                    0 => (0, 0),
                     1 => match &port_dimensions[0] {
                         sv::UnpackedDimension::Range(
                             unpacked_dimension_range,
                         ) => {
                             let range =
                                 &unpacked_dimension_range.nodes.0.nodes.1.nodes;
-                            evaluate_numeric_constant_expression(&ast, &range.0)
-                                - evaluate_numeric_constant_expression(
+                            (
+                                evaluate_numeric_constant_expression(
+                                    &ast, &range.0,
+                                ),
+                                evaluate_numeric_constant_expression(
                                     &ast, &range.2,
-                                )
+                                ),
+                            )
                         }
                         sv::UnpackedDimension::Expression(
                             unpacked_dimension_expression,
@@ -182,6 +216,7 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                     },
                     _ => todo!("Don't support multidimensional ports yet"),
                 };
+                let port_width = port_msb + 1 - port_lsb;
 
                 let port_type = if port_width <= 8 {
                     quote! { verilog::__reexports::verilator::types::CData }
@@ -207,6 +242,9 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                 struct_members.push(quote! {
                     pub #port_name_ident: #port_type
                 });
+                verilated_model_init_self.push(quote! {
+                    #port_name_ident: 0 as _
+                });
 
                 match port_direction {
                     sv::PortDirection::Input(_) => {
@@ -230,6 +268,13 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                                 });
                             }
                         }
+
+                        verilated_model_init_impl.push(quote! {
+                            let #setter: extern "C" fn(*mut libc::c_void, #port_type) =
+                                *unsafe { library.get(concat!("ffi_V", #top_name, "_pin_", #port_name).as_bytes()) }
+                                    .expect("failed to get symbol");
+                        });
+                        verilated_model_init_self.push(quote! { #setter });
                     }
                     sv::PortDirection::Output(_) => {
                         let getter = format_ident!("read_{}", port_name);
@@ -239,10 +284,31 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                         posteval_impl.push(quote! {
                             self.#port_name_ident = (self.#getter)(self.model);
                         });
+
+                        verilated_model_init_impl.push(quote! {
+                            let #getter: extern "C" fn(*mut libc::c_void) -> #port_type =
+                                *unsafe { library.get(concat!("ffi_V", #top_name, "_read_", #port_name).as_bytes()) }
+                                    .expect("failed to get symbol");
+                        });
+                        verilated_model_init_self.push(quote! { #getter });
                     }
                     sv::PortDirection::Inout(keyword) => todo!(),
                     sv::PortDirection::Ref(keyword) => todo!(),
                 }
+
+                let verilated_model_port_direction = match port_direction {
+                    sv::PortDirection::Input(_) => {
+                        quote! { verilog::__reexports::verilator::PortDirection::Input }
+                    }
+                    sv::PortDirection::Output(_) => {
+                        quote! { verilog::__reexports::verilator::PortDirection::Output }
+                    }
+                    _ => todo!("Other port directions"),
+                };
+
+                verilated_model_ports_impl.push(quote! {
+                    (#port_name, #port_msb, #port_lsb, #verilated_model_port_direction)
+                });
             }
             _ => todo!("Other types of ports"),
         }
@@ -254,6 +320,7 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
     });
 
     let struct_name = item.ident;
+    let port_count = verilated_model_ports_impl.len();
     quote! {
         struct #struct_name<'ctx> {
             #(#struct_members),*,
@@ -276,6 +343,24 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
             fn drop(&mut self) {
                 (self.drop_model)(self.model);
                 self.model = std::ptr::null_mut();
+            }
+        }
+
+        impl<'ctx> verilog::__reexports::verilator::VerilatedModel for #struct_name<'ctx> {
+            fn name() -> &'static str {
+                #top_name
+            }
+
+            fn ports() -> &'static [(&'static str, usize, usize, PortDirection)] {
+                static PORTS: [(&'static str, usize, usize, PortDirection); #port_count] = [#(#verilated_model_ports_impl),*];
+                &PORTS
+            }
+
+            fn init_from(library: &verilog::__reexports::libloading::Library) -> Self {
+                #(#verilated_model_init_impl)*
+                Self {
+                    #(#verilated_model_init_self),*
+                }
             }
         }
     }
