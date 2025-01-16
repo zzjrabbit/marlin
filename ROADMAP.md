@@ -1,8 +1,7 @@
-- [ ] verilator bindings for one top
-    - [ ] `build.rs` code
+- [x] verilator bindings for one top
     - [ ] ffi code
     - [ ] ffi types
-- [ ] verilator bindings for multiple tops
+- [x] verilator bindings for multiple tops
 - [ ] proc macro builder library for custom HDLs
     - [ ] create custom HDL interface with proc macro builder library
 - [ ] custom runtime (e.g. cider for calyx)
