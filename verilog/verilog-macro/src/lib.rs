@@ -1,12 +1,29 @@
+// Copyright (C) 2024 Ethan Uppal.
+//
+// This project is free software: you can redistribute it and/or modify it under
+// the terms of the GNU Lesser General Public License as published by the Free
+// Software Foundation, version 3 of the License only.
+//
+// This project is distributed in the hope that it will be useful, but WITHOUT
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+// details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this project. If not, see <https://www.gnu.org/licenses/>.
+
 use std::{collections::HashMap, env, path::PathBuf};
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use sv_parser::{self as sv, unwrap_node, Locate, RefNode};
 
 struct MacroArgs {
     source_path: syn::LitStr,
     name: syn::LitStr,
+
+    clock_port: Option<syn::Ident>,
+    reset_port: Option<syn::Ident>,
 }
 
 impl syn::parse::Parse for MacroArgs {
@@ -24,7 +41,12 @@ impl syn::parse::Parse for MacroArgs {
         input.parse::<syn::Token![=]>()?;
         let name = input.parse::<syn::LitStr>()?;
 
-        Ok(Self { source_path, name })
+        Ok(Self {
+            source_path,
+            name,
+            clock_port: None,
+            reset_port: None,
+        })
     }
 }
 
@@ -112,6 +134,10 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     };
 
+    let mut struct_members = vec![];
+    let mut preeval_impl = vec![];
+    let mut posteval_impl = vec![];
+    let mut other_impl = vec![];
     for (_, port) in port_declarations_list.contents() {
         match port {
             sv::AnsiPortDeclaration::Net(net) => {
@@ -119,12 +145,22 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                     "Port identifier could not be traced back to source code",
                 );
 
-                let port_direction = net.nodes.0.as_ref().and_then(|maybe_net_header| match maybe_net_header {
+                let Some(port_direction )= net.nodes.0.as_ref().and_then(|maybe_net_header| match maybe_net_header {
                     sv::NetPortHeaderOrInterfacePortHeader::NetPortHeader(net_port_header) => {
                         net_port_header.nodes.0.as_ref()
                     },
                     _ => todo!("Other port header")
-                });
+                }) else {
+                    return syn::Error::new_spanned(
+                        args.source_path,
+                        format!(
+                            "Port `{}` has no supported direction (`input` or `output`)",
+                            port_name
+                        ),
+                    )
+                    .into_compile_error()
+                    .into();
+                };
 
                 let port_dimensions = &net.nodes.2;
                 let port_width = match port_dimensions.len() {
@@ -146,14 +182,101 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                     },
                     _ => todo!("Don't support multidimensional ports yet"),
                 };
+
+                let port_type = if port_width <= 8 {
+                    quote! { verilog::__reexports::verilator::types::CData }
+                } else if port_width <= 16 {
+                    quote! { verilog::__reexports::verilator::types::SData }
+                } else if port_width <= 32 {
+                    quote! { verilog::__reexports::verilator::types::IData }
+                } else if port_width <= 64 {
+                    quote! { verilog::__reexports::verilator::types::QData }
+                } else {
+                    return syn::Error::new_spanned(
+                        args.source_path,
+                        format!(
+                            "Port `{}` is wider than supported right now",
+                            port_name
+                        ),
+                    )
+                    .into_compile_error()
+                    .into();
+                };
+
+                let port_name_ident = format_ident!("{}", port_name);
+                struct_members.push(quote! {
+                    pub #port_name_ident: #port_type
+                });
+
+                match port_direction {
+                    sv::PortDirection::Input(_) => {
+                        let setter = format_ident!("pin_{}", port_name);
+                        struct_members.push(quote! {
+                            #setter: extern "C" fn(*mut verilog::__reexports::libc::c_void, #port_type)
+                        });
+                        preeval_impl.push(quote! {
+                            (self.#setter)(self.model, self.#port_name_ident);
+                        });
+
+                        if let Some(clock_port) = &args.clock_port {
+                            if clock_port.to_string().as_str() == port_name {
+                                other_impl.push(quote! {
+                                    pub fn tick(&mut self) {
+                                        self.#port_name = 1 as _;
+                                        self.eval();
+                                        self.#port_name = 0 as _;
+                                        self.eval();
+                                    }
+                                });
+                            }
+                        }
+                    }
+                    sv::PortDirection::Output(_) => {
+                        let getter = format_ident!("read_{}", port_name);
+                        struct_members.push(quote! {
+                            #getter: extern "C" fn(*mut verilog::__reexports::libc::c_void) -> #port_type
+                        });
+                        posteval_impl.push(quote! {
+                            self.#port_name_ident = (self.#getter)(self.model);
+                        });
+                    }
+                    sv::PortDirection::Inout(keyword) => todo!(),
+                    sv::PortDirection::Ref(keyword) => todo!(),
+                }
             }
             _ => todo!("Other types of ports"),
         }
     }
 
+    struct_members.push(quote! {
+        drop_model: extern "C" fn(*mut verilog::__reexports::libc::c_void),
+        eval_model: extern "C" fn(*mut verilog::__reexports::libc::c_void)
+    });
+
     let struct_name = item.ident;
     quote! {
-        struct #struct_name {
+        struct #struct_name<'ctx> {
+            #(#struct_members),*,
+            #[doc = "# Safety\nThe Rust binding to the model will not outlive the dynamic library context (with lifetime `'ctx`) and is dropped when this struct is."]
+            model: *mut verilog::__reexports::libc::c_void,
+            _phantom: std::marker::PhantomData<&'ctx ()>
+        }
+
+        impl #struct_name<'_> {
+            pub fn eval(&mut self) {
+                #(#preeval_impl)*
+                (self.eval_model)(self.model);
+                #(#posteval_impl)*
+            }
+
+            #(#other_impl)*
+        }
+
+        impl<'ctx> std::ops::Drop for #struct_name<'ctx> {
+            fn drop(&mut self) {
+                (self.drop_model)(self.model);
+                self.model = std::ptr::null_mut();
+            }
         }
     }
     .into()

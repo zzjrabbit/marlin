@@ -9,3 +9,6 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
+verilog-macro = { path = "../verilog-macro" }
+verilator = { path = "../../verilator/" }
+libc.workspace = true

@@ -342,7 +342,7 @@ dependencies = [
  "libloading",
  "snafu",
  "verilator",
- "verilog-macro",
+ "verilog",
 ]
 
 [[package]]
@@ -382,6 +382,11 @@ dependencies = [
 [[package]]
 name = "verilog"
 version = "0.1.0"
+dependencies = [
+ "libc",
+ "verilator",
+ "verilog-macro",
+]
 
 [[package]]
 name = "verilog-macro"

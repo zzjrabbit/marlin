@@ -3,7 +3,7 @@ use std::fs;
 use libloading::Library;
 use snafu::{ResultExt, Whatever};
 use verilator::PortDirection;
-use verilog_macro::verilog;
+use verilog::verilog;
 
 #[verilog(src = "sv/main.sv", name = "main")]
 struct Main;

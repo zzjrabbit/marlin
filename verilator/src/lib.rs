@@ -17,6 +17,32 @@ use std::{fmt::Write, fs, process::Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use snafu::{prelude::*, Whatever};
 
+pub mod types {
+    /// From the Verilator documentation: "Data representing 'bit' of 1-8 packed
+    /// bits."
+    pub type CData = u8;
+
+    /// From the Verilator documentation: "Data representing 'bit' of 9-16
+    /// packed bits"
+    pub type SData = u16;
+
+    /// From the Verilator documentation: "Data representing 'bit' of 17-32
+    /// packed bits."
+    pub type IData = u32;
+
+    /// From the Verilator documentation: "Data representing 'bit' of 33-64
+    /// packed bits."
+    pub type QData = u64;
+
+    /// From the Verilator documentation: "Data representing one element of
+    /// WData array."
+    pub type EData = u32;
+
+    /// From the Verilator documentation: "Data representing >64 packed bits
+    /// (used as pointer)."
+    pub type WData = EData;
+}
+
 // hardcoded knowledge:
 // - output library is obj_dir/libV${top_module}.a
 // - location of verilated.h
