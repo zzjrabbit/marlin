@@ -338,10 +338,7 @@ dependencies = [
 name = "test_crate"
 version = "0.1.0"
 dependencies = [
- "libc",
- "libloading",
  "snafu",
- "verilator",
  "verilog",
 ]
 

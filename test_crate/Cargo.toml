@@ -10,8 +10,4 @@ license.workspace = true
 
 [dependencies]
 snafu.workspace = true
-verilator = { path = "../verilator/" }
 verilog = { path = "../verilog/verilog" }
-
-libloading = "0.8.6"
-libc = "0.2.169"
