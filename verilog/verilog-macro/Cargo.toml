@@ -1,5 +1,5 @@
 [package]
-name = "test_crate"
+name = "verilog-macro"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,10 +8,11 @@ description.workspace = true
 readme.workspace = true
 license.workspace = true
 
-[dependencies]
-snafu.workspace = true
-verilator = { path = "../verilator/" }
-verilog-macro = { path = "../verilog/verilog-macro/" }
+[lib]
+proc-macro = true
 
-libloading = "0.8.6"
-libc = "0.2.169"
+[dependencies]
+proc-macro2 = "1.0.93"
+syn = "2.0.96"
+quote = "1.0.38"
+sv-parser = "0.13.3"

@@ -1,6 +1,6 @@
 [workspace]
+members = ["test_crate", "verilator", "verilog/verilog", "verilog/verilog-macro"]
 resolver = "2"
-members = ["test_crate", "verilator"]
 
 [workspace.package]
 version = "0.1.0"

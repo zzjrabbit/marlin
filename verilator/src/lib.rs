@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this project. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{env::current_dir, fmt::Write, fs, process::Command};
+use std::{fmt::Write, fs, process::Command};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use snafu::{prelude::*, Whatever};
@@ -103,12 +103,12 @@ extern "C" {{
         };
 
         if matches!(direction, PortDirection::Input | PortDirection::Inout) {
-            let return_type = type_macro(None);
+            let input_type = type_macro(Some("new_value"));
             writeln!(
                 &mut buffer,
                 r#"
-    {return_type} ffi_V{top}_get_{port}(V{top}* top) {{
-        return top->{port};
+    void ffi_V{top}_pin_{port}(V{top}* top, {input_type}) {{
+        top->{port} = new_value;
     }}
             "#
             )
@@ -116,12 +116,12 @@ extern "C" {{
         }
 
         if matches!(direction, PortDirection::Output | PortDirection::Inout) {
-            let input_type = type_macro(Some(port));
+            let return_type = type_macro(None);
             writeln!(
                 &mut buffer,
                 r#"
-    void ffi_V{top}_set_{port}(V{top}* top, {input_type}) {{
-        top->{port} = value;
+    {return_type} ffi_V{top}_read_{port}(V{top}* top) {{
+        return top->{port};
     }}
             "#
             )
@@ -143,7 +143,7 @@ pub fn build(
     top_module: &str,
     ports: &[(&str, usize, usize, PortDirection)],
     artifact_directory: &Utf8Path,
-) -> Result<(), Whatever> {
+) -> Result<Utf8PathBuf, Whatever> {
     let ffi_artifact_directory = artifact_directory.join("ffi");
     fs::create_dir_all(&ffi_artifact_directory).whatever_context(
         "Failed to create ffi subdirectory under artifacts directory",
@@ -156,10 +156,11 @@ pub fn build(
     // bug in verilator#5226 means the directory must be relative to -Mdir
     let ffi_wrappers = Utf8Path::new("../ffi/ffi.cpp");
 
+    let library_name = format!("V{}_dyn", top_module);
     let verilator_output = Command::new("verilator")
         .args(["--cc", "-sv", "--build", "-j", "0", "-Wall"])
         .args(["-CFLAGS", "-shared -fpic"])
-        .args(["--lib-create", &format!("V{}", top_module)])
+        .args(["--lib-create", &library_name])
         .args(["--Mdir", verilator_artifact_directory.as_str()])
         .args(["--top-module", top_module])
         //.arg("-O3")
@@ -177,5 +178,5 @@ pub fn build(
         );
     }
 
-    Ok(())
+    Ok(verilator_artifact_directory.join(format!("lib{}.so", library_name)))
 }

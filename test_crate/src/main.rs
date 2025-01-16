@@ -1,51 +1,52 @@
 use std::fs;
 
-use libloading::{Library, Symbol};
+use libloading::Library;
 use snafu::{ResultExt, Whatever};
 use verilator::PortDirection;
+use verilog_macro::verilog;
+
+#[verilog(src = "sv/main.sv", name = "main")]
+struct Main;
 
 #[snafu::report]
 fn main() -> Result<(), Whatever> {
     fs::create_dir_all("artifacts")
         .whatever_context("Failed to create artifacts directory")?;
-    verilator::build(
+    let library_path = verilator::build(
         &["sv/main.sv"],
         "main",
         &[
             ("single_input", 0, 0, PortDirection::Input),
-            ("small_input", 7, 0, PortDirection::Input),
-            ("medium_input", 63, 0, PortDirection::Input),
-            ("big_input", 127, 0, PortDirection::Input),
             ("single_output", 0, 0, PortDirection::Output),
-            ("small_output", 7, 0, PortDirection::Output),
-            ("medium_output", 63, 0, PortDirection::Output),
-            ("big_output", 127, 0, PortDirection::Output),
         ],
         "artifacts".as_ref(),
     )
     .whatever_context("Failed to build verilator dynamic library")?;
 
-    //let library = unsafe { Library::new("artifacts/obj_dir/libVmain.so") }
-    //    .expect("failed to get lib");
-    //let new_main: Symbol<extern "C" fn() -> *mut libc::c_void> =
-    //    unsafe { library.get(b"new_main") }.expect("failed to get symbol");
-    //let eval: Symbol<extern "C" fn(*mut libc::c_void)> =
-    //    unsafe { library.get(b"eval") }.expect("failed to get symbol");
-    //let set_single: Symbol<extern "C" fn(*mut libc::c_void, i32)> =
-    //    unsafe { library.get(b"set_single") }.expect("failed to get symbol");
-    //let get_single: Symbol<extern "C" fn(*mut libc::c_void) -> i32> =
-    //    unsafe { library.get(b"get_single") }.expect("failed to get symbol");
-    //
-    //let new_main = *new_main;
-    //let eval = *eval;
-    //let set_single = *set_single;
-    //let get_single = *get_single;
-    //
-    //let main = new_main();
-    //set_single(main, 1);
-    //println!("{}", get_single(main));
-    //eval(main);
-    //println!("{}", get_single(main));
+    let library =
+        unsafe { Library::new(library_path) }.expect("failed to get lib");
+    let new_main: extern "C" fn() -> *mut libc::c_void =
+        *unsafe { library.get(b"ffi_new_Vmain") }
+            .expect("failed to get symbol");
+    let delete_main: extern "C" fn(*mut libc::c_void) =
+        *unsafe { library.get(b"ffi_delete_Vmain") }
+            .expect("failed to get symbol");
+    let pin_input: extern "C" fn(*mut libc::c_void, i32) =
+        *unsafe { library.get(b"ffi_Vmain_pin_single_input") }
+            .expect("failed to get symbol");
+    let read_output: extern "C" fn(*mut libc::c_void) -> i32 =
+        *unsafe { library.get(b"ffi_Vmain_read_single_output") }
+            .expect("failed to get symbol");
+    let eval: extern "C" fn(*mut libc::c_void) =
+        *unsafe { library.get(b"ffi_Vmain_eval") }
+            .expect("failed to get symbol");
+
+    let main = new_main();
+    pin_input(main, 1);
+    println!("{}", read_output(main));
+    eval(main);
+    println!("{}", read_output(main));
+    delete_main(main);
 
     Ok(())
 }
