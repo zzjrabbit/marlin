@@ -53,6 +53,8 @@ pub enum PortDirection {
 pub trait VerilatedModel {
     fn name() -> &'static str;
 
+    fn source_path() -> &'static str;
+
     fn ports() -> &'static [(&'static str, usize, usize, PortDirection)];
 
     fn init_from(library: &Library) -> Self;
@@ -84,6 +86,18 @@ impl VerilatorRuntime {
     /// Constructs a new model. Incrementally builds the Verilated model library
     /// only once.
     pub fn create_model<M: VerilatedModel>(&mut self) -> Result<M, Whatever> {
+        if !self.source_files.iter().any(|source_file| {
+            match (
+                source_file.canonicalize_utf8(),
+                Utf8Path::new(M::source_path()).canonicalize_utf8(),
+            ) {
+                (Ok(lhs), Ok(rhs)) => lhs == rhs,
+                _ => false,
+            }
+        }) {
+            whatever!("Module `{}` requires source file {}, which was not provided to the runtime", M::name(), M::source_path());
+        }
+
         if !self.libraries.contains_key(M::name()) {
             let local_artifacts_directory =
                 self.artifact_directory.join(M::name());

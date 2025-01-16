@@ -357,6 +357,7 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let struct_name = item.ident;
     let port_count = verilated_model_ports_impl.len();
+    let source_path = args.source_path;
     quote! {
         struct #struct_name<'ctx> {
             #(#struct_members),*,
@@ -385,6 +386,10 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
         impl<'ctx> verilog::__reexports::verilator::VerilatedModel for #struct_name<'ctx> {
             fn name() -> &'static str {
                 #top_name
+            }
+
+            fn source_path() -> &'static str {
+                #source_path
             }
 
             fn ports() -> &'static [(&'static str, usize, usize, verilog::__reexports::verilator::PortDirection)] {
