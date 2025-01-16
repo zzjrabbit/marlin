@@ -22,14 +22,17 @@ struct MacroArgs {
     source_path: syn::LitStr,
     name: syn::LitStr,
 
-    clock_port: Option<syn::Ident>,
-    reset_port: Option<syn::Ident>,
+    clock_port: Option<syn::LitStr>,
+    reset_port: Option<syn::LitStr>,
 }
 
 impl syn::parse::Parse for MacroArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         syn::custom_keyword!(src);
         syn::custom_keyword!(name);
+
+        syn::custom_keyword!(clock);
+        syn::custom_keyword!(reset);
 
         input.parse::<src>()?;
         input.parse::<syn::Token![=]>()?;
@@ -41,11 +44,30 @@ impl syn::parse::Parse for MacroArgs {
         input.parse::<syn::Token![=]>()?;
         let name = input.parse::<syn::LitStr>()?;
 
+        let mut clock_port = None;
+        let mut reset_port = None;
+        while input.peek(syn::Token![,]) {
+            input.parse::<syn::Token![,]>()?;
+
+            let lookahead = input.lookahead1();
+            if lookahead.peek(clock) {
+                input.parse::<clock>()?;
+                input.parse::<syn::Token![=]>()?;
+                clock_port = Some(input.parse::<syn::LitStr>()?);
+            } else if lookahead.peek(reset) {
+                input.parse::<reset>()?;
+                input.parse::<syn::Token![=]>()?;
+                reset_port = Some(input.parse::<syn::LitStr>()?);
+            } else {
+                return Err(lookahead.error());
+            }
+        }
+
         Ok(Self {
             source_path,
             name,
-            clock_port: None,
-            reset_port: None,
+            clock_port,
+            reset_port,
         })
     }
 }
@@ -257,7 +279,7 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                         });
 
                         if let Some(clock_port) = &args.clock_port {
-                            if clock_port.to_string().as_str() == port_name {
+                            if clock_port.value().as_str() == port_name {
                                 other_impl.push(quote! {
                                     pub fn tick(&mut self) {
                                         self.#port_name = 1 as _;
@@ -267,6 +289,10 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                                     }
                                 });
                             }
+                        }
+
+                        if let Some(reset_port) = &args.reset_port {
+                            todo!("reset ports");
                         }
 
                         verilated_model_init_impl.push(quote! {
