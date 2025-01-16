@@ -63,8 +63,8 @@ pub trait VerilatedModel {
 pub struct VerilatorRuntime {
     artifact_directory: Utf8PathBuf,
     source_files: Vec<Utf8PathBuf>,
-    /// Mapping between hardware tops and Verilator implementations
-    libraries: HashMap<String, Library>,
+    /// Mapping between hardware (top, path) and Verilator implementations
+    libraries: HashMap<(String, String), Library>,
 }
 
 impl VerilatorRuntime {
@@ -75,7 +75,7 @@ impl VerilatorRuntime {
         Self {
             artifact_directory: artifact_directory.to_owned(),
             source_files: source_files
-                .into_iter()
+                .iter()
                 .map(|path| path.to_path_buf())
                 .collect(),
             libraries: HashMap::new(),
@@ -98,7 +98,10 @@ impl VerilatorRuntime {
             whatever!("Module `{}` requires source file {}, which was not provided to the runtime", M::name(), M::source_path());
         }
 
-        if !self.libraries.contains_key(M::name()) {
+        if !self.libraries.contains_key(&(
+            M::name().to_string(),
+            M::source_path().to_string(),
+        )) {
             let local_artifacts_directory =
                 self.artifact_directory.join(M::name());
 
@@ -120,10 +123,16 @@ impl VerilatorRuntime {
 
             let library = unsafe { Library::new(library_path) }
                 .whatever_context("Failed to load verilator dynamic library")?;
-            self.libraries.insert(M::name().to_string(), library);
+            self.libraries.insert(
+                (M::name().to_string(), M::source_path().to_string()),
+                library,
+            );
         }
 
-        let library = self.libraries.get(M::name()).unwrap();
+        let library = self
+            .libraries
+            .get(&(M::name().to_string(), M::source_path().to_string()))
+            .unwrap();
 
         Ok(M::init_from(library))
     }
