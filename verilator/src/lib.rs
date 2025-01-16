@@ -12,11 +12,16 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this project. If not, see <https://www.gnu.org/licenses/>.
 
-use std::{collections::HashMap, fmt::Write, fs, process::Command};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fmt::Write,
+    fs,
+    process::Command,
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use libloading::Library;
-use snafu::{prelude::*, Whatever};
+use snafu::{whatever, ResultExt, Whatever};
 
 pub mod types {
     /// From the Verilator documentation: "Data representing 'bit' of 1-8 packed
@@ -71,21 +76,34 @@ impl VerilatorRuntime {
     pub fn new(
         artifact_directory: &Utf8Path,
         source_files: &[&Utf8Path],
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Whatever> {
+        for source_file in source_files {
+            if !source_file.is_file() {
+                whatever!(
+                    "Source file {} does not exist or is not a file",
+                    source_file
+                );
+            }
+        }
+
+        Ok(Self {
             artifact_directory: artifact_directory.to_owned(),
             source_files: source_files
                 .iter()
                 .map(|path| path.to_path_buf())
                 .collect(),
             libraries: HashMap::new(),
-        }
+        })
     }
 
     // function name needs some work
     /// Constructs a new model. Incrementally builds the Verilated model library
     /// only once.
     pub fn create_model<M: VerilatedModel>(&mut self) -> Result<M, Whatever> {
+        if M::name().chars().any(|c| c == '\\' || c == ' ') {
+            whatever!("Escaped module names are not supported");
+        }
+
         if !self.source_files.iter().any(|source_file| {
             match (
                 source_file.canonicalize_utf8(),
@@ -98,10 +116,10 @@ impl VerilatorRuntime {
             whatever!("Module `{}` requires source file {}, which was not provided to the runtime", M::name(), M::source_path());
         }
 
-        if !self.libraries.contains_key(&(
-            M::name().to_string(),
-            M::source_path().to_string(),
-        )) {
+        if let Entry::Vacant(entry) = self
+            .libraries
+            .entry((M::name().to_string(), M::source_path().to_string()))
+        {
             let local_artifacts_directory =
                 self.artifact_directory.join(M::name());
 
@@ -123,10 +141,7 @@ impl VerilatorRuntime {
 
             let library = unsafe { Library::new(library_path) }
                 .whatever_context("Failed to load verilator dynamic library")?;
-            self.libraries.insert(
-                (M::name().to_string(), M::source_path().to_string()),
-                library,
-            );
+            entry.insert(library);
         }
 
         let library = self
@@ -253,7 +268,7 @@ extern "C" {{
     Ok(ffi_wrappers)
 }
 
-pub fn build(
+fn build(
     source_files: &[&str],
     top_module: &str,
     ports: &[(&str, usize, usize, PortDirection)],
@@ -273,7 +288,7 @@ pub fn build(
 
     let library_name = format!("V{}_dyn", top_module);
     let verilator_output = Command::new("verilator")
-        .args(["--cc", "-sv", "--build", "-j", "0", "-Wall"])
+        .args(["--cc", "-sv", "--build", "-j", "0"])
         .args(["-CFLAGS", "-shared -fpic"])
         .args(["--lib-create", &library_name])
         .args(["--Mdir", verilator_artifact_directory.as_str()])

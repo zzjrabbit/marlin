@@ -1,5 +1,5 @@
 [package]
-name = "verilog-macro"
+name = "test_swim_crate"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,9 +8,6 @@ description.workspace = true
 readme.workspace = true
 license.workspace = true
 
-[lib]
-proc-macro = true
-
 [dependencies]
-syn.workspace = true
-verilog-macro-builder = { path = "../verilog-macro-builder/" }
+snafu.workspace = true
+spade = { path = "../../../spade/spade/" }

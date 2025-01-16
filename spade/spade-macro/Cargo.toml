@@ -1,5 +1,5 @@
 [package]
-name = "verilog-macro"
+name = "spade-macro"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -12,5 +12,9 @@ license.workspace = true
 proc-macro = true
 
 [dependencies]
+verilog-macro-builder = { path = "../../verilog/verilog-macro-builder/" }
+proc-macro2 = "1.0.93"
 syn.workspace = true
-verilog-macro-builder = { path = "../verilog-macro-builder/" }
+quote = "1.0.38"
+toml = "0.8.19"
+camino.workspace = true

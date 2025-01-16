@@ -1,9 +1,13 @@
 [workspace]
 members = [
-    "test_crate",
+    "spade/spade",
+    "spade/spade-macro",
+    "test_crates/test_crate",
+    "test_crates/test_swim/test_swim_crate",
     "verilator",
     "verilog/verilog",
     "verilog/verilog-macro",
+    "verilog/verilog-macro-builder",
 ]
 resolver = "2"
 
@@ -21,3 +25,4 @@ snafu = "0.8.5"
 camino = "1.1.9"
 libc = "0.2.169"
 libloading = "0.8.6"
+syn = { version = "2.0.96", features = ["full"] }

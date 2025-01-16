@@ -1,5 +1,5 @@
 [package]
-name = "test_crate"
+name = "spade"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -9,5 +9,7 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
+verilog = { path = "../../verilog/verilog/" }
+spade-macro = { path = "../spade-macro/" }
+camino.workspace = true
 snafu.workspace = true
-verilog = { path = "../verilog/verilog" }

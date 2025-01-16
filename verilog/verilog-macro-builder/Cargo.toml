@@ -1,5 +1,5 @@
 [package]
-name = "verilog-macro"
+name = "verilog-macro-builder"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,9 +8,8 @@ description.workspace = true
 readme.workspace = true
 license.workspace = true
 
-[lib]
-proc-macro = true
-
 [dependencies]
+proc-macro2 = "1.0.93"
 syn.workspace = true
-verilog-macro-builder = { path = "../verilog-macro-builder/" }
+quote = "1.0.38"
+sv-parser = "0.13.3"
