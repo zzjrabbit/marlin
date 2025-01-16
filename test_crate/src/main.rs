@@ -1,6 +1,5 @@
 use snafu::Whatever;
-use verilator::{PortDirection, VerilatorRuntime};
-use verilog::verilog;
+use verilog::{verilog, VerilatorRuntime};
 
 #[verilog(src = "sv/main.sv", name = "main")]
 struct Main;
@@ -12,10 +11,10 @@ fn main() -> Result<(), Whatever> {
 
     let mut main = runtime.create_model::<Main>()?;
 
-    main.single_input = 1;
-    println!("{}", main.single_output);
+    main.medium_input = u32::MAX;
+    println!("{}", main.medium_output);
     main.eval();
-    println!("{}", main.single_output);
+    println!("{}", main.medium_output);
 
     Ok(())
 }

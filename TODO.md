@@ -1,2 +1,3 @@
-- [ ] Fix bug with width of ports not being detected correctly
+- [x] Fix bug with width of ports not being detected correctly
 - [ ] Add env_logger printing so you can see eg when it rebuilds
+- [ ] Wide ports

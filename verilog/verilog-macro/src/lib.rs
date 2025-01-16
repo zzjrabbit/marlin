@@ -169,17 +169,17 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let top_name = args.name;
     verilated_model_init_impl.push(quote! {
-        let new_model: extern "C" fn() -> *mut libc::c_void =
+        let new_model: extern "C" fn() -> *mut verilog::__reexports::libc::c_void =
             *unsafe { library.get(concat!("ffi_new_V", #top_name).as_bytes()) }
                 .expect("failed to get symbol");
         let model = (new_model)();
 
 
-        let delete_model: extern "C" fn(*mut libc::c_void) =
+        let delete_model: extern "C" fn(*mut verilog::__reexports::libc::c_void) =
             *unsafe { library.get(concat!("ffi_delete_V", #top_name).as_bytes()) }
                 .expect("failed to get symbol");
 
-        let eval_model: extern "C" fn(*mut libc::c_void) =
+        let eval_model: extern "C" fn(*mut verilog::__reexports::libc::c_void) =
             *unsafe { library.get(concat!("ffi_V", #top_name, "_eval").as_bytes()) }
                 .expect("failed to get symbol");
     });
@@ -197,9 +197,9 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                     "Port identifier could not be traced back to source code",
                 );
 
-                let Some(port_direction )= net.nodes.0.as_ref().and_then(|maybe_net_header| match maybe_net_header {
+                let Some((port_direction, port_type ))= net.nodes.0.as_ref().and_then(|maybe_net_header| match maybe_net_header {
                     sv::NetPortHeaderOrInterfacePortHeader::NetPortHeader(net_port_header) => {
-                        net_port_header.nodes.0.as_ref()
+                        net_port_header.nodes.0.as_ref().map(|port_direction| (port_direction, &net_port_header.nodes.1))   
                     },
                     _ => todo!("Other port header")
                 }) else {
@@ -214,15 +214,27 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                     .into();
                 };
 
-                let port_dimensions = &net.nodes.2;
+                let port_dimensions = match port_type {
+                    sv::NetPortType::DataType(net_port_type_data_type) => {
+                        match &net_port_type_data_type.nodes.1 {
+                            sv::DataTypeOrImplicit::DataType(data_type) => todo!("a"),
+                            sv::DataTypeOrImplicit::ImplicitDataType(implicit_data_type) => {
+                                &implicit_data_type.nodes.1
+                            },
+                        }
+                    },
+                    sv::NetPortType::NetTypeIdentifier(net_type_identifier) => todo!("bklk"),
+                    sv::NetPortType::Interconnect(net_port_type_interconnect) => todo!("ckl"),
+                };
+
                 let (port_msb, port_lsb) = match port_dimensions.len() {
                     0 => (0, 0),
                     1 => match &port_dimensions[0] {
-                        sv::UnpackedDimension::Range(
-                            unpacked_dimension_range,
+                        sv::PackedDimension::Range(
+                            packed_dimension_range,
                         ) => {
                             let range =
-                                &unpacked_dimension_range.nodes.0.nodes.1.nodes;
+                                &packed_dimension_range.nodes.0.nodes.1.nodes;
                             (
                                 evaluate_numeric_constant_expression(
                                     &ast, &range.0,
@@ -231,10 +243,8 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                                     &ast, &range.2,
                                 ),
                             )
-                        }
-                        sv::UnpackedDimension::Expression(
-                            unpacked_dimension_expression,
-                        ) => todo!("Other type of dimension"),
+                        },
+                        _ => todo!()
                     },
                     _ => todo!("Don't support multidimensional ports yet"),
                 };
@@ -296,7 +306,7 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                         }
 
                         verilated_model_init_impl.push(quote! {
-                            let #setter: extern "C" fn(*mut libc::c_void, #port_type) =
+                            let #setter: extern "C" fn(*mut verilog::__reexports::libc::c_void, #port_type) =
                                 *unsafe { library.get(concat!("ffi_V", #top_name, "_pin_", #port_name).as_bytes()) }
                                     .expect("failed to get symbol");
                         });
@@ -312,7 +322,7 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                         });
 
                         verilated_model_init_impl.push(quote! {
-                            let #getter: extern "C" fn(*mut libc::c_void) -> #port_type =
+                            let #getter: extern "C" fn(*mut verilog::__reexports::libc::c_void) -> #port_type =
                                 *unsafe { library.get(concat!("ffi_V", #top_name, "_read_", #port_name).as_bytes()) }
                                     .expect("failed to get symbol");
                         });
@@ -377,8 +387,8 @@ pub fn verilog(args: TokenStream, item: TokenStream) -> TokenStream {
                 #top_name
             }
 
-            fn ports() -> &'static [(&'static str, usize, usize, PortDirection)] {
-                static PORTS: [(&'static str, usize, usize, PortDirection); #port_count] = [#(#verilated_model_ports_impl),*];
+            fn ports() -> &'static [(&'static str, usize, usize, verilog::__reexports::verilator::PortDirection)] {
+                static PORTS: [(&'static str, usize, usize, verilog::__reexports::verilator::PortDirection); #port_count] = [#(#verilated_model_ports_impl),*];
                 &PORTS
             }
 
