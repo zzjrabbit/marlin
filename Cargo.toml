@@ -1,13 +1,13 @@
 [workspace]
 members = [
+    "verilator",
     "spade-support/spade",
     "spade-support/spade-macro",
-    "test_crates/test_crate",
-    "test_crates/test_swim/test_swim_crate",
-    "verilator",
+    "spade-support/example-project/test",
     "verilog-support/verilog",
     "verilog-support/verilog-macro",
     "verilog-support/verilog-macro-builder",
+    "verilog-support/example-project",
 ]
 resolver = "2"
 
@@ -32,3 +32,7 @@ sv-parser = "0.13.3"
 logos = "0.14.4"
 log = "0.4.25"
 colog = "1.3.0"
+
+verilator = { path = "verilator" }
+verilog = { path = "verilog-support/verilog" }
+spade = { path = "spade-support/spade" }

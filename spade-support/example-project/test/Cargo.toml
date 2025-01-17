@@ -1,5 +1,5 @@
 [package]
-name = "test_crate"
+name = "example-spade-project"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -9,6 +9,6 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-snafu.workspace = true
 colog.workspace = true
-verilog = { path = "../../verilog-support/verilog" }
+snafu.workspace = true
+spade.workspace = true

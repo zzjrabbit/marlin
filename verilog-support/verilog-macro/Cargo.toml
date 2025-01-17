@@ -14,5 +14,5 @@ proc-macro = true
 [dependencies]
 syn.workspace = true
 verilog-macro-builder = { path = "../verilog-macro-builder/" }
-verilator = { path = "../../verilator/" }
+verilator.workspace = true
 sv-parser.workspace = true

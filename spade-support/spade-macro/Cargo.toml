@@ -13,7 +13,7 @@ proc-macro = true
 
 [dependencies]
 verilog-macro-builder = { path = "../../verilog-support/verilog-macro-builder/" }
-verilator = { path = "../../verilator/" }
+verilator.workspace = true
 camino.workspace = true
 
 proc-macro2.workspace = true

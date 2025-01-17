@@ -9,7 +9,7 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
-verilog = { path = "../../verilog-support/verilog/" }
+verilog.workspace = true
 spade-macro = { path = "../spade-macro/" }
 camino.workspace = true
 snafu.workspace = true

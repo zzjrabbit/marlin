@@ -1,3 +1,2 @@
 target/
-test_crate/artifacts/
-test_crates/test_crate/artifacts/
+**/artifacts/
