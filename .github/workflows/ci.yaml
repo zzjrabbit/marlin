@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  test_verilog:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Install verilator
+        run: make install_verilator
+      - name: Test
+        run: cd verilog-support/example-project && cargo run -p example-verilog-project
+  test_spade:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust Caching
+        uses: Swatinem/rust-cache@v2
+      - name: Install verilator
+        run: make install_verilator
+      - name: Install swim
+        run: cargo install --locked --git https://gitlab.com/spade-lang/swim
+      - name: Test
+        run: cd spade-support/example-project && cargo run -p example-spade-project
