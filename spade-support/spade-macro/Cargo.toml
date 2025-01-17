@@ -1,0 +1,25 @@
+[package]
+name = "spade-macro"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description.workspace = true
+readme.workspace = true
+license.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+verilog-macro-builder = { path = "../../verilog-support/verilog-macro-builder/" }
+verilator = { path = "../../verilator/" }
+camino.workspace = true
+
+proc-macro2.workspace = true
+syn.workspace = true
+quote.workspace = true
+
+logos.workspace = true
+spade-parser = { git = "https://gitlab.com/spade-lang/spade" }
+spade-ast = { git = "https://gitlab.com/spade-lang/spade" }

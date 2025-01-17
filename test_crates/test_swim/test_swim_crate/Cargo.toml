@@ -9,5 +9,6 @@ readme.workspace = true
 license.workspace = true
 
 [dependencies]
+colog.workspace = true
 snafu.workspace = true
-spade = { path = "../../../spade/spade/" }
+spade = { path = "../../../spade-support/spade/" }

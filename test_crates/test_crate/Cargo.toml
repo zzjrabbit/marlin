@@ -10,4 +10,5 @@ license.workspace = true
 
 [dependencies]
 snafu.workspace = true
-verilog = { path = "../../verilog/verilog" }
+colog.workspace = true
+verilog = { path = "../../verilog-support/verilog" }

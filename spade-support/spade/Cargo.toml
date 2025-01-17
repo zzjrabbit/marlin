@@ -1,5 +1,5 @@
 [package]
-name = "spade-macro"
+name = "spade"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -8,13 +8,9 @@ description.workspace = true
 readme.workspace = true
 license.workspace = true
 
-[lib]
-proc-macro = true
-
 [dependencies]
-verilog-macro-builder = { path = "../../verilog/verilog-macro-builder/" }
-proc-macro2 = "1.0.93"
-syn.workspace = true
-quote = "1.0.38"
-toml = "0.8.19"
+verilog = { path = "../../verilog-support/verilog/" }
+spade-macro = { path = "../spade-macro/" }
 camino.workspace = true
+snafu.workspace = true
+log.workspace = true

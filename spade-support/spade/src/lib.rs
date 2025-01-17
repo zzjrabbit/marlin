@@ -1,7 +1,7 @@
 pub use spade_macro::spade;
 pub use verilog::__reexports;
 
-use std::env::current_dir;
+use std::{env::current_dir, process::Command};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use snafu::{whatever, ResultExt, Whatever};
@@ -22,7 +22,14 @@ pub struct SpadeRuntime {
 }
 
 impl SpadeRuntime {
-    pub fn new(artifact_directory: &Utf8Path) -> Result<Self, Whatever> {
+    pub fn new(
+        artifact_directory: &Utf8Path,
+        call_swim_build: bool,
+        verbose: bool,
+    ) -> Result<Self, Whatever> {
+        if verbose {
+            log::info!("Searching for swim project root");
+        }
         let Some(swim_toml_path) = search_for_swim_toml(
             current_dir()
                 .whatever_context("Failed to get current directory")?
@@ -34,6 +41,28 @@ impl SpadeRuntime {
             whatever!("Failed to find swim.toml");
         };
 
+        if call_swim_build {
+            if verbose {
+                log::info!("Invoking `swim build`");
+            }
+            let mut swim_project_path = swim_toml_path.clone();
+            swim_project_path.pop();
+            let swim_output = Command::new("swim")
+                .arg("build")
+                .current_dir(swim_project_path)
+                .output()
+                .whatever_context("Invocation of swim failed")?;
+
+            if !swim_output.status.success() {
+                whatever!(
+            "Invocation of swim failed with nonzero exit code {}\n\n--- STDOUT ---\n{}\n\n--- STDERR ---\n{}",
+            swim_output.status,
+            String::from_utf8(swim_output.stdout).unwrap_or_default(),
+            String::from_utf8(swim_output.stderr).unwrap_or_default()
+        );
+            }
+        }
+
         let mut spade_sv_path = swim_toml_path;
         spade_sv_path.pop();
         spade_sv_path.push("build/spade.sv");
@@ -42,6 +71,7 @@ impl SpadeRuntime {
             verilator_runtime: VerilatorRuntime::new(
                 artifact_directory,
                 &[&spade_sv_path],
+                verbose,
             )?,
         })
     }

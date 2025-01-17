@@ -70,13 +70,18 @@ pub struct VerilatorRuntime {
     source_files: Vec<Utf8PathBuf>,
     /// Mapping between hardware (top, path) and Verilator implementations
     libraries: HashMap<(String, String), Library>,
+    verbose: bool,
 }
 
 impl VerilatorRuntime {
     pub fn new(
         artifact_directory: &Utf8Path,
         source_files: &[&Utf8Path],
+        verbose: bool,
     ) -> Result<Self, Whatever> {
+        if verbose {
+            log::info!("Validating source files");
+        }
         for source_file in source_files {
             if !source_file.is_file() {
                 whatever!(
@@ -93,6 +98,7 @@ impl VerilatorRuntime {
                 .map(|path| path.to_path_buf())
                 .collect(),
             libraries: HashMap::new(),
+            verbose,
         })
     }
 
@@ -104,6 +110,9 @@ impl VerilatorRuntime {
             whatever!("Escaped module names are not supported");
         }
 
+        if self.verbose {
+            log::info!("Validating model source file");
+        }
         if !self.source_files.iter().any(|source_file| {
             match (
                 source_file.canonicalize_utf8(),
@@ -123,9 +132,15 @@ impl VerilatorRuntime {
             let local_artifacts_directory =
                 self.artifact_directory.join(M::name());
 
+            if self.verbose {
+                log::info!("Creating artifacts directory");
+            }
             fs::create_dir_all(&local_artifacts_directory)
                 .whatever_context("Failed to create artifacts directory")?;
 
+            if self.verbose {
+                log::info!("Building the dynamic library with verilator");
+            }
             let source_files = self
                 .source_files
                 .iter()
@@ -139,6 +154,9 @@ impl VerilatorRuntime {
             )
             .whatever_context("Failed to build verilator dynamic library")?;
 
+            if self.verbose {
+                log::info!("Opening the dynamic library");
+            }
             let library = unsafe { Library::new(library_path) }
                 .whatever_context("Failed to load verilator dynamic library")?;
             entry.insert(library);

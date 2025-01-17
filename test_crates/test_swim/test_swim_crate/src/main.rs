@@ -1,12 +1,14 @@
 use snafu::Whatever;
 use spade::{spade, SpadeRuntime};
 
-#[spade(src = "main.spade", name = "main")]
+#[spade(src = "src/main.spade", name = "main")]
 struct Main;
 
 #[snafu::report]
 fn main() -> Result<(), Whatever> {
-    let mut runtime = SpadeRuntime::new("artifacts".into())?;
+    colog::init();
+
+    let mut runtime = SpadeRuntime::new("artifacts".into(), true, true)?;
 
     let mut main = runtime.create_model::<Main>()?;
 

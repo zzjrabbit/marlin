@@ -12,3 +12,4 @@ license.workspace = true
 snafu.workspace = true
 camino.workspace = true
 libloading.workspace = true
+log.workspace = true
