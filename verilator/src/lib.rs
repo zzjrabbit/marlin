@@ -286,6 +286,54 @@ extern "C" {{
     Ok(ffi_wrappers)
 }
 
+fn needs_rebuild(
+    source_files: &[&str],
+    verilator_artifact_directory: &Utf8Path,
+) -> Result<bool, Whatever> {
+    if !verilator_artifact_directory.exists() {
+        return Ok(true);
+    }
+
+    let Some(last_built) = fs::read_dir(verilator_artifact_directory)
+        .whatever_context(format!(
+            "{} exists but could not read it",
+            verilator_artifact_directory
+        ))?
+        .flatten() // Remove failed
+        .filter_map(|f| {
+            if f.metadata()
+                .map(|metadata| metadata.is_file())
+                .unwrap_or(false)
+            {
+                f.metadata().unwrap().modified().ok()
+            } else {
+                None
+            }
+        })
+        .max()
+    else {
+        return Ok(false);
+    };
+
+    for source_file in source_files {
+        let last_edited = fs::metadata(source_file)
+            .whatever_context(format!(
+                "Failed to read file metadata for source file {}",
+                source_file
+            ))?
+            .modified()
+            .whatever_context(format!(
+                "Failed to determine last-modified time for source file {}",
+                source_file
+            ))?;
+        if last_edited > last_built {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
 fn build(
     source_files: &[&str],
     top_module: &str,
@@ -297,6 +345,15 @@ fn build(
         "Failed to create ffi subdirectory under artifacts directory",
     )?;
     let verilator_artifact_directory = artifact_directory.join("obj_dir");
+    let library_name = format!("V{}_dyn", top_module);
+    let library_path =
+        verilator_artifact_directory.join(format!("lib{}.so", library_name));
+
+    if !needs_rebuild(source_files, &verilator_artifact_directory)
+        .whatever_context("Failed to check if artifacts need rebuilding")?
+    {
+        return Ok(library_path);
+    }
 
     let _ffi_wrappers = build_ffi(&ffi_artifact_directory, top_module, ports)
         .whatever_context("Failed to build FFI wrappers")?;
@@ -304,7 +361,6 @@ fn build(
     // bug in verilator#5226 means the directory must be relative to -Mdir
     let ffi_wrappers = Utf8Path::new("../ffi/ffi.cpp");
 
-    let library_name = format!("V{}_dyn", top_module);
     let verilator_output = Command::new("verilator")
         .args(["--cc", "-sv", "--build", "-j", "0"])
         .args(["-CFLAGS", "-shared -fpic"])
@@ -326,5 +382,5 @@ fn build(
         );
     }
 
-    Ok(verilator_artifact_directory.join(format!("lib{}.so", library_name)))
+    Ok(library_path)
 }
