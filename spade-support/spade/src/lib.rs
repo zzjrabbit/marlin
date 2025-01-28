@@ -1,7 +1,7 @@
 pub use spade_macro::spade;
 pub use verilog::__reexports;
 
-use std::{env::current_dir, process::Command};
+use std::{env::current_dir, ffi::OsString, process::Command};
 
 use camino::Utf8PathBuf;
 use snafu::{whatever, ResultExt, Whatever};
@@ -17,12 +17,39 @@ fn search_for_swim_toml(mut start: Utf8PathBuf) -> Option<Utf8PathBuf> {
     None
 }
 
+/// Optional configuration for creating a `SpadeRuntime`. Usually, you can just
+/// use `SpadeRuntimeOptions::default()`.
+pub struct SpadeRuntimeOptions {
+    /// The name of the `swim` executable, interpreted in some way by the
+    /// OS/shell.
+    pub swim_executable: OsString,
+
+    /// Whether `swim build` should be automatically called. This switch is
+    /// useful to disable when, for example, another tool has already
+    /// called `swim build`.
+    pub call_swim_build: bool,
+}
+
+impl Default for SpadeRuntimeOptions {
+    fn default() -> Self {
+        Self {
+            swim_executable: "swim".into(),
+            call_swim_build: true,
+        }
+    }
+}
+
+/// Runtime for Spade code.
 pub struct SpadeRuntime {
     verilator_runtime: VerilatorRuntime,
 }
 
 impl SpadeRuntime {
-    pub fn new(call_swim_build: bool, verbose: bool) -> Result<Self, Whatever> {
+    /// Creates a new runtime for instantiating Spade units as Rust objects.
+    pub fn new(
+        options: SpadeRuntimeOptions,
+        verbose: bool,
+    ) -> Result<Self, Whatever> {
         if verbose {
             log::info!("Searching for swim project root");
         }
@@ -41,11 +68,11 @@ impl SpadeRuntime {
         let mut swim_project_path = swim_toml_path;
         swim_project_path.pop();
 
-        if call_swim_build {
+        if options.call_swim_build {
             if verbose {
                 log::info!("Invoking `swim build` (this may take a while)");
             }
-            let swim_output = Command::new("swim")
+            let swim_output = Command::new(options.swim_executable)
                 .arg("build")
                 .current_dir(&swim_project_path)
                 .output()
@@ -73,6 +100,8 @@ impl SpadeRuntime {
         })
     }
 
+    /// Instantiates a new Spade unit. This function simply wraps
+    /// [`VerilatorRuntime::create_model`].
     pub fn create_model<M: VerilatedModel>(&mut self) -> Result<M, Whatever> {
         self.verilator_runtime.create_model()
     }
