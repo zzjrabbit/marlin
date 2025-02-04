@@ -1,11 +1,19 @@
 // Copyright (C) 2024 Ethan Uppal.
 //
-// This Source Code Form is subject to the terms of the Mozilla Public License,
-// v. 2.0. If a copy of the MPL was not distributed with this file, You can
-// obtain one at https://mozilla.org/MPL/2.0/.
+// This program is free software: you can redistribute it and/or modify it under
+// the terms of the GNU General Public License as published by the Free Software
+// Foundation, version 3 of the License only.
+//
+// This program is distributed in the hope that it will be useful, but WITHOUT
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+// details.
+//
+// You should have received a copy of the GNU General Public License along with
+// this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use snafu::{ResultExt, Whatever};
-use verilog::{PortDirection, VerilatorRuntime};
+use verilog::{PortDirection, VerilatorRuntime, VerilatorRuntimeOptions};
 
 #[snafu::report]
 fn main() -> Result<(), Whatever> {
@@ -14,6 +22,8 @@ fn main() -> Result<(), Whatever> {
     let mut runtime = VerilatorRuntime::new(
         "artifacts2".into(),
         &["sv/main.sv".as_ref()],
+        [],
+        VerilatorRuntimeOptions::default(),
         true,
     )?;
 

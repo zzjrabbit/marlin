@@ -4,8 +4,16 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
 
+//! This module implements the Verilator runtime for instantiating hardware
+//! modules.
+//!
+//! For an example of how to use this runtime to add support for your own custom
+//! HDL, see `SpadeRuntime` (under the spade-support/ folder), which just wraps
+//! [`VerilatorRuntime`].
+
 use std::{
     collections::{hash_map::Entry, HashMap},
+    ffi::OsString,
     fmt, fs,
 };
 
@@ -81,10 +89,57 @@ pub trait VerilatedModel {
     fn init_from(library: &Library) -> Self;
 }
 
+/// `DpiFunction(c_name, c_function_code, rust_function_code)`.
+pub struct DpiFunction(pub &'static str, pub &'static str, pub &'static str);
+
+/// Optional configuration for creating a [`VerilatorRuntime`]. Usually, you can
+/// just use [`VerilatorRuntimeOptions::default()`].
+pub struct VerilatorRuntimeOptions {
+    /// The name of the `verilator` executable, interpreted in some way by the
+    /// OS/shell.
+    pub verilator_executable: OsString,
+
+    /// If `None`, there will be no optimization. If a value from `0` to `3`
+    /// inclusive, the flag `-O<level>` will be passed. Enabling will slow
+    /// compilation times.
+    pub verilator_optimization: Option<usize>,
+
+    /// Whether verilator should always be invoked instead of only when the
+    /// source files or DPI functions change.
+    pub force_verilator_rebuild: bool,
+
+    /// The name of the `rustc` executable, interpreted in some way by the
+    /// OS/shell.
+    pub rustc_executable: OsString,
+
+    /// Whether to enable optimization when calling `rustc`. Enabling will slow
+    /// compilation times.
+    pub rustc_optimization: bool,
+
+    /// The name of the `make` executable, interpreted in some way by the
+    /// OS/shell.
+    pub make_executable: OsString,
+}
+
+impl Default for VerilatorRuntimeOptions {
+    fn default() -> Self {
+        Self {
+            verilator_executable: "verilator".into(),
+            verilator_optimization: None,
+            force_verilator_rebuild: false,
+            rustc_executable: "rustc".into(),
+            rustc_optimization: false,
+            make_executable: "make".into(),
+        }
+    }
+}
+
 /// Runtime for (System)Verilog code.
 pub struct VerilatorRuntime {
     artifact_directory: Utf8PathBuf,
     source_files: Vec<Utf8PathBuf>,
+    dpi_functions: Vec<DpiFunction>,
+    options: VerilatorRuntimeOptions,
     /// Mapping between hardware (top, path) and Verilator implementations
     libraries: HashMap<(String, String), Library>,
     verbose: bool,
@@ -93,9 +148,11 @@ pub struct VerilatorRuntime {
 impl VerilatorRuntime {
     /// Creates a new runtime for instantiating (System)Verilog modules as Rust
     /// objects.
-    pub fn new(
+    pub fn new<I: IntoIterator<Item = DpiFunction>>(
         artifact_directory: &Utf8Path,
         source_files: &[&Utf8Path],
+        dpi_functions: I,
+        options: VerilatorRuntimeOptions,
         verbose: bool,
     ) -> Result<Self, Whatever> {
         if verbose {
@@ -104,7 +161,7 @@ impl VerilatorRuntime {
         for source_file in source_files {
             if !source_file.is_file() {
                 whatever!(
-                    "Source file {} does not exist or is not a file. Note that if you specified relative paths, you must be in the correct directory",
+                    "Source file {} does not exist or is not a file. Note that if it's a relative path, you must be in the correct directory",
                     source_file
                 );
             }
@@ -116,6 +173,8 @@ impl VerilatorRuntime {
                 .iter()
                 .map(|path| path.to_path_buf())
                 .collect(),
+            dpi_functions: dpi_functions.into_iter().collect(),
+            options,
             libraries: HashMap::new(),
             verbose,
         })
@@ -123,6 +182,8 @@ impl VerilatorRuntime {
 
     /// Constructs a new model. Uses lazy and incremental building for
     /// efficiency.
+    ///
+    /// See also: [`VerilatorRuntime::create_dyn_model`]
     pub fn create_model<M: VerilatedModel>(&mut self) -> Result<M, Whatever> {
         let library = self
             .build_or_retrieve_library(M::name(), M::source_path(), M::ports())
@@ -133,6 +194,9 @@ impl VerilatorRuntime {
         Ok(M::init_from(library))
     }
 
+    // TODO: should this be unified with the normal create_model by having
+    // DynamicVerilatedModel implement VerilatedModel?
+
     /// Constructs a new dynamic model. Uses lazy and incremental building for
     /// efficiency. You must guarantee the correctness of the suppplied
     /// information, namely, that `name` is precisely the name of the
@@ -140,6 +204,8 @@ impl VerilatorRuntime {
     /// using [`fs::canonicalize`], the relative/absolute path to the Verilog
     /// file defining the module `name`, and `ports` is a correct subset of
     /// the ports of the Verilog module.
+    ///
+    /// See also: [`VerilatorRuntime::create_model`]
     pub fn create_dyn_model<'ctx>(
         &'ctx mut self,
         name: &str,
@@ -191,6 +257,24 @@ impl VerilatorRuntime {
         })
     }
 
+    /// Invokes verilator to build a dynamic library for the Verilog module
+    /// named `name` defined in the file `source_path` and with signature
+    /// `ports`.
+    ///
+    /// If the library is already cached for the given module name/source path
+    /// pair, then it is returned immediately.
+    ///
+    /// It is required that the `ports` signature matches a subset of the ports
+    /// defined on the Verilog module exactly.
+    ///
+    /// If `self.options.force_verilator_rebuild`, then the library will always
+    /// be rebuilt. Otherwise, it is only rebuilt on (a conservative
+    /// definition) of change:
+    ///
+    /// - Edits to Verilog source code
+    /// - Edits to DPI functions
+    ///
+    /// See [`build_library::build_library`] for more information.
     fn build_or_retrieve_library(
         &mut self,
         name: &str,
@@ -242,10 +326,17 @@ impl VerilatorRuntime {
             let local_artifacts_directory = self.artifact_directory.join(name);
 
             if self.verbose {
-                log::info!("Creating artifacts directory");
+                log::info!(
+                    "Creating artifacts directory {}",
+                    local_artifacts_directory
+                );
             }
-            fs::create_dir_all(&local_artifacts_directory)
-                .whatever_context("Failed to create artifacts directory")?;
+            fs::create_dir_all(&local_artifacts_directory).whatever_context(
+                format!(
+                    "Failed to create artifacts directory {}",
+                    local_artifacts_directory,
+                ),
+            )?;
 
             if self.verbose {
                 log::info!("Building the dynamic library with verilator");
@@ -257,9 +348,12 @@ impl VerilatorRuntime {
                 .collect::<Vec<_>>();
             let library_path = build_library(
                 &source_files,
+                &self.dpi_functions,
                 name,
                 ports,
                 &local_artifacts_directory,
+                &self.options,
+                self.verbose,
             )
             .whatever_context("Failed to build verilator dynamic library")?;
 
@@ -274,6 +368,8 @@ impl VerilatorRuntime {
         Ok(self
             .libraries
             .get(&(name.to_string(), source_path.to_string()))
-            .unwrap())
+            .expect(
+                "If it didn't exist, we just inserted it into the hash map",
+            ))
     }
 }
