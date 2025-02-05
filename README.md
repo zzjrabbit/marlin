@@ -2,6 +2,7 @@
 
 [![CI Badge](https://github.com/ethanuppal/dumbname/actions/workflows/ci.yaml/badge.svg)](https://github.com/ethanuppal/dumbname/blob/main/.github/workflows/ci.yaml)
 [![Code Style Badge](https://github.com/ethanuppal/dumbname/actions/workflows/lint.yaml/badge.svg)](https://github.com/ethanuppal/dumbname/blob/main/.github/workflows/lint.yaml)
+[![cargo-deny badge](https://github.com/ethanuppal/dumbname/actions/workflows/cargo-deny.yaml/badge.svg)](https://github.com/ethanuppal/dumbname/blob/main/.github/workflows/cargo-deny.yaml)
 [![Lines of Code Badge](https://tokei.rs/b1/github/ethanuppal/dumbname?category=code)](https://github.com/ethanuppal/dumbname)
 
 > [!IMPORTANT]
@@ -88,10 +89,15 @@ The TLDR is procedural macros + `dlopen`.
 that uses a build script to statically link in verilated bindings, but is
 unmaintained for years as of writing this.
 
-## License
+## 🔒 License & Legal
 
 dumbname is licensed under the Mozilla Public License 2.0. This license is
 similar to the Lesser GNU Public License, except that the copyleft applies only
 to the source code of this library, not any library that uses it. That means you
 can statically or dynamically link with unfree code (see
 <https://www.mozilla.org/en-US/MPL/2.0/FAQ/#virality>).
+
+I use [`cargo-deny`](https://github.com/EmbarkStudios/cargo-deny) (see the
+[`deny.toml`](./deny.toml) to ensure no licensing violations occur. I also check
+this on CI to prevent merging any new dependencies or dependency updates that
+introduce incompatible licenses.
