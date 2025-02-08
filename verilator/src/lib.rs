@@ -19,11 +19,13 @@ use std::{
 
 use build_library::build_library;
 use camino::{Utf8Path, Utf8PathBuf};
+use dpi::DpiFunction;
 use dynamic::DynamicVerilatedModel;
 use libloading::Library;
 use snafu::{prelude::*, Whatever};
 
 mod build_library;
+pub mod dpi;
 pub mod dynamic;
 
 /// Verilator-defined types for C FFI.
@@ -89,9 +91,6 @@ pub trait VerilatedModel {
     fn init_from(library: &Library) -> Self;
 }
 
-/// `DpiFunction(c_name, c_function_code, rust_function_code)`.
-pub struct DpiFunction(pub &'static str, pub &'static str, pub &'static str);
-
 /// Optional configuration for creating a [`VerilatorRuntime`]. Usually, you can
 /// just use [`VerilatorRuntimeOptions::default()`].
 pub struct VerilatorRuntimeOptions {
@@ -107,18 +106,6 @@ pub struct VerilatorRuntimeOptions {
     /// Whether verilator should always be invoked instead of only when the
     /// source files or DPI functions change.
     pub force_verilator_rebuild: bool,
-
-    /// The name of the `rustc` executable, interpreted in some way by the
-    /// OS/shell.
-    pub rustc_executable: OsString,
-
-    /// Whether to enable optimization when calling `rustc`. Enabling will slow
-    /// compilation times.
-    pub rustc_optimization: bool,
-
-    /// The name of the `make` executable, interpreted in some way by the
-    /// OS/shell.
-    pub make_executable: OsString,
 }
 
 impl Default for VerilatorRuntimeOptions {
@@ -127,9 +114,6 @@ impl Default for VerilatorRuntimeOptions {
             verilator_executable: "verilator".into(),
             verilator_optimization: None,
             force_verilator_rebuild: false,
-            rustc_executable: "rustc".into(),
-            rustc_optimization: false,
-            make_executable: "make".into(),
         }
     }
 }
@@ -138,7 +122,7 @@ impl Default for VerilatorRuntimeOptions {
 pub struct VerilatorRuntime {
     artifact_directory: Utf8PathBuf,
     source_files: Vec<Utf8PathBuf>,
-    dpi_functions: Vec<DpiFunction>,
+    dpi_functions: Vec<&'static dyn DpiFunction>,
     options: VerilatorRuntimeOptions,
     /// Mapping between hardware (top, path) and Verilator implementations
     libraries: HashMap<(String, String), Library>,
@@ -148,7 +132,7 @@ pub struct VerilatorRuntime {
 impl VerilatorRuntime {
     /// Creates a new runtime for instantiating (System)Verilog modules as Rust
     /// objects.
-    pub fn new<I: IntoIterator<Item = DpiFunction>>(
+    pub fn new<I: IntoIterator<Item = &'static dyn DpiFunction>>(
         artifact_directory: &Utf8Path,
         source_files: &[&Utf8Path],
         dpi_functions: I,
@@ -274,6 +258,9 @@ impl VerilatorRuntime {
     /// - Edits to Verilog source code
     /// - Edits to DPI functions
     ///
+    /// Then, if this is the first time building the library, and there are DPI
+    /// functions, the library will be initialized with the DPI functions.
+    ///
     /// See [`build_library::build_library`] for more information.
     fn build_or_retrieve_library(
         &mut self,
@@ -362,6 +349,30 @@ impl VerilatorRuntime {
             }
             let library = unsafe { Library::new(library_path) }
                 .whatever_context("Failed to load verilator dynamic library")?;
+
+            if !self.dpi_functions.is_empty() {
+                let dpi_init_callback: extern "C" fn(
+                    *const *const libc::c_void,
+                ) = *unsafe { library.get(b"dpi_init_callback") }
+                    .whatever_context("Failed to load DPI initializer")?;
+
+                // order is important here. the function pointers will be
+                // initialized in the same order that they
+                // appear in the DPI array --- this is to match how the C
+                // initialization code was constructed in `build_library`.
+                let function_pointers = self
+                    .dpi_functions
+                    .iter()
+                    .map(|dpi_function| dpi_function.pointer())
+                    .collect::<Vec<_>>();
+
+                (dpi_init_callback)(function_pointers.as_ptr_range().start);
+
+                if self.verbose {
+                    log::info!("Initialized DPI functions");
+                }
+            }
+
             entry.insert(library);
         }
 
