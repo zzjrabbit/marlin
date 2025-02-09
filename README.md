@@ -3,7 +3,9 @@
 [![CI Badge](https://github.com/ethanuppal/marlin/actions/workflows/ci.yaml/badge.svg)](https://github.com/ethanuppal/marlin/blob/main/.github/workflows/ci.yaml)
 [![Code Style Badge](https://github.com/ethanuppal/marlin/actions/workflows/lint.yaml/badge.svg)](https://github.com/ethanuppal/marlin/blob/main/.github/workflows/lint.yaml)
 [![cargo-deny badge](https://github.com/ethanuppal/marlin/actions/workflows/cargo-deny.yaml/badge.svg)](https://github.com/ethanuppal/marlin/blob/main/.github/workflows/cargo-deny.yaml)
-[![Lines of Code Badge](https://tokei.rs/b1/github/ethanuppal/marlin?category=code)](https://github.com/ethanuppal/marlin)
+[![Crates.io Version](https://img.shields.io/crates/v/marlin)](https://crates.io/crates/marlin)
+[![docs.rs](https://img.shields.io/docsrs/marlin)](https://docs.rs/marlin/latest/marlin)
+[![Crates.io License](https://img.shields.io/crates/l/marlin)](./LICENSE)
 
 Marlin is a really powerful library (and API) that lets you "import" hardware
 modules into Rust (or Rust functions into hardware modules!). 
