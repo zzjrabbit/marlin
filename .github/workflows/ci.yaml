@@ -18,8 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Rust Caching
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
       - name: Install verilator
         run: make install_verilator
       - name: Manual test
@@ -31,7 +30,7 @@ jobs:
           cargo test --package example-verilog-project --test dpi_tutorial -- --exact main
           cargo test --package example-verilog-project --test visibility_works -- --exact main
       - name: Cargo test
-        run: cargo test --package example-verilog-project -- --test-threads 1
+        run: cargo test --package example-verilog-project
       
   test_spade:
     strategy:
@@ -47,7 +46,7 @@ jobs:
       - name: Install swim
         run: cargo install --locked --git https://gitlab.com/spade-lang/swim --rev 639c5d88db76ef3454af4feef842c37985ca1943
       - name: Test
-        run: cargo test --package example-spade-project --test simple_test -- --exact main
+        run: cargo test --package example-spade-project
 
   test_swim_marlin:
     strategy:
@@ -56,8 +55,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Rust Caching
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
       - name: Install verilator
         run: make install_verilator
       - name: Install swim

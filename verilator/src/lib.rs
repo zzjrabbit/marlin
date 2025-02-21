@@ -8,8 +8,8 @@
 //! modules.
 //!
 //! For an example of how to use this runtime to add support for your own custom
-//! HDL, see `SpadeRuntime` (under the spade-support/ folder), which just wraps
-//! [`VerilatorRuntime`].
+//! HDL, see `SpadeRuntime` (under the "language-support/spade/" directory),
+//! which just wraps [`VerilatorRuntime`].
 
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -272,6 +272,10 @@ impl VerilatorRuntime {
     /// functions, the library will be initialized with the DPI functions.
     ///
     /// See [`build_library::build_library`] for more information.
+    ///
+    /// # Safety
+    ///
+    /// This function is thread-safe.
     fn build_or_retrieve_library(
         &mut self,
         name: &str,
@@ -320,7 +324,12 @@ impl VerilatorRuntime {
             .libraries
             .entry((name.to_string(), source_path.to_string()))
         {
-            let local_artifacts_directory = self.artifact_directory.join(name);
+            let local_directory_name = format!(
+                "{name}_{}",
+                source_path.replace("_", "__").replace("/", "_")
+            );
+            let local_artifacts_directory =
+                self.artifact_directory.join(&local_directory_name);
 
             if self.verbose {
                 log::info!(
@@ -334,6 +343,28 @@ impl VerilatorRuntime {
                     local_artifacts_directory,
                 ),
             )?;
+
+            // # Safety
+            // build_library is not thread-safe, so we have to lock the
+            // directory
+            if self.verbose {
+                log::info!("Acquiring file lock on artifact directory");
+            }
+            let file_lock = fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(self.artifact_directory.join(format!("{local_directory_name}.lock")))
+                .whatever_context(
+                    "Failed to open file lock file for artifacts directory (this is not the actual lock itself, it is an I/O error)",
+                )?;
+
+            let _ =
+                file_guard::lock(&file_lock, file_guard::Lock::Exclusive, 0, 1)
+                    .whatever_context(
+                        "Failed to acquire file lock for artifacts directory",
+                    )?;
 
             if self.verbose {
                 log::info!("Building the dynamic library with verilator");
