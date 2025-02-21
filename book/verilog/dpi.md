@@ -72,7 +72,6 @@ Next, we'll add Marlin and other desired dependencies.
 # other dependencies...
 marlin = "0.1.0" # no language features needed
 snafu = "0.8.5"
-colog = "1.3.0"
 ```
 
 Finally, we need the Rust file where we define the DPI function and drive the model.
@@ -102,8 +101,7 @@ fn main() -> Result<(), Whatever> {
         &["src/dpi.sv".as_ref()],
         &[],
         [three],
-        VerilatorRuntimeOptions::default(),
-        true,
+        VerilatorRuntimeOptions::default_logging(),
     )?;
 
     let mut main = runtime.create_model::<Main>()?;

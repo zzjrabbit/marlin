@@ -15,6 +15,10 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     ffi::OsString,
     fmt, fs,
+    io::Write,
+    os::fd::FromRawFd,
+    sync::{LazyLock, Mutex},
+    time::Instant,
 };
 
 use build_library::build_library;
@@ -22,6 +26,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use dpi::DpiFunction;
 use dynamic::DynamicVerilatedModel;
 use libloading::Library;
+use owo_colors::OwoColorize;
 use snafu::{prelude::*, Whatever};
 
 mod build_library;
@@ -109,6 +114,9 @@ pub struct VerilatorRuntimeOptions {
 
     /// A list of warnings to disable.
     pub ignored_warnings: Vec<String>,
+
+    /// Whether to use the log crate.
+    pub log: bool,
 }
 
 impl Default for VerilatorRuntimeOptions {
@@ -118,6 +126,18 @@ impl Default for VerilatorRuntimeOptions {
             verilator_optimization: None,
             force_verilator_rebuild: false,
             ignored_warnings: vec![],
+            log: false,
+        }
+    }
+}
+
+impl VerilatorRuntimeOptions {
+    /// The same as the [`Default`] implementation except that the log crate is
+    /// used.
+    pub fn default_logging() -> Self {
+        Self {
+            log: true,
+            ..Default::default()
         }
     }
 }
@@ -131,7 +151,6 @@ pub struct VerilatorRuntime {
     options: VerilatorRuntimeOptions,
     /// Mapping between hardware (top, path) and Verilator implementations
     libraries: HashMap<(String, String), Library>,
-    verbose: bool,
 }
 
 impl VerilatorRuntime {
@@ -143,9 +162,8 @@ impl VerilatorRuntime {
         include_directories: &[&Utf8Path],
         dpi_functions: I,
         options: VerilatorRuntimeOptions,
-        verbose: bool,
     ) -> Result<Self, Whatever> {
-        if verbose {
+        if options.log {
             log::info!("Validating source files");
         }
         for source_file in source_files {
@@ -170,7 +188,6 @@ impl VerilatorRuntime {
             dpi_functions: dpi_functions.into_iter().collect(),
             options,
             libraries: HashMap::new(),
-            verbose,
         })
     }
 
@@ -286,7 +303,7 @@ impl VerilatorRuntime {
             whatever!("Escaped module names are not supported");
         }
 
-        if self.verbose {
+        if self.options.log {
             log::info!("Validating model source file");
         }
         if !self.source_files.iter().any(|source_file| {
@@ -331,7 +348,7 @@ impl VerilatorRuntime {
             let local_artifacts_directory =
                 self.artifact_directory.join(&local_directory_name);
 
-            if self.verbose {
+            if self.options.log {
                 log::info!(
                     "Creating artifacts directory {}",
                     local_artifacts_directory
@@ -347,7 +364,7 @@ impl VerilatorRuntime {
             // # Safety
             // build_library is not thread-safe, so we have to lock the
             // directory
-            if self.verbose {
+            if self.options.log {
                 log::info!("Acquiring file lock on artifact directory");
             }
             let file_lock = fs::OpenOptions::new()
@@ -366,7 +383,17 @@ impl VerilatorRuntime {
                         "Failed to acquire file lock for artifacts directory",
                     )?;
 
-            if self.verbose {
+            writeln!(
+                &mut STDERR.lock().expect("poisoned"),
+                "{} {} ({})",
+                "   Compiling".bold().green(),
+                name,
+                source_path
+            )
+            .whatever_context("Failed to write to non-captured stderr")?;
+            let start = Instant::now();
+
+            if self.options.log {
                 log::info!("Building the dynamic library with verilator");
             }
             let library_path = build_library(
@@ -377,11 +404,11 @@ impl VerilatorRuntime {
                 ports,
                 &local_artifacts_directory,
                 &self.options,
-                self.verbose,
+                self.options.log,
             )
             .whatever_context("Failed to build verilator dynamic library")?;
 
-            if self.verbose {
+            if self.options.log {
                 log::info!("Opening the dynamic library");
             }
             let library = unsafe { Library::new(library_path) }
@@ -405,12 +432,23 @@ impl VerilatorRuntime {
 
                 (dpi_init_callback)(function_pointers.as_ptr_range().start);
 
-                if self.verbose {
+                if self.options.log {
                     log::info!("Initialized DPI functions");
                 }
             }
 
             entry.insert(library);
+
+            let end = Instant::now();
+            let duration = end - start;
+            writeln!(
+                &mut STDERR.lock().expect("poisoned"),
+                "{} Marlin dynamic compilation in {}.{:02}s",
+                "    Finished".bold().green(),
+                duration.as_secs(),
+                duration.subsec_millis() / 10
+            )
+            .whatever_context("Failed to write to non-captured stderr")?;
         }
 
         Ok(self
@@ -421,3 +459,7 @@ impl VerilatorRuntime {
             ))
     }
 }
+
+// TODO: make cross-platform
+static STDERR: LazyLock<Mutex<fs::File>> =
+    LazyLock::new(|| Mutex::new(unsafe { fs::File::from_raw_fd(2) }));
