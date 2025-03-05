@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
   "verilator",
   "language-support/verilog",
@@ -7,15 +7,18 @@ members = [
   "language-support/verilog-macro-builder",
   "language-support/spade",
   "language-support/spade-macro",
+  "language-support/veryl",
+  "language-support/veryl-macro",
   "examples/verilog-project",
   "examples/spade-project",
+  "examples/veryl_project",
 ]
 
 [workspace.package]
 version = "0.2.1"
 authors = ["Ethan Uppal"]
-edition = "2021"
-rust-version = "1.83"
+edition = "2024"
+rust-version = "1.85"
 description = "🦀 No nonsense hardware testing in Rust 🛠️"
 repository = "https://github.com/ethanuppal/marlin"
 readme = "README.md"
@@ -41,6 +44,7 @@ glob = { version = "0.3.2", default-features = false }
 file-guard = { version = "0.2.0", default-features = false }
 indicatif = { version = "0.17.11", default-features = false }
 dashmap = { version = "6.1.0", default-features = false }
+veryl-parser = { git = "https://github.com/veryl-lang/veryl", default-features = false }
 
 marlin-verilator = { path = "verilator", version = "0.2.1" }
 marlin-verilog = { path = "language-support/verilog", version = "0.2.1" }
@@ -48,6 +52,8 @@ marlin-verilog-macro = { path = "language-support/verilog-macro", version = "0.2
 marlin-verilog-macro-builder = { path = "language-support/verilog-macro-builder", version = "0.2.1" }
 marlin-spade = { path = "language-support/spade", version = "0.2.1" }
 marlin-spade-macro = { path = "language-support/spade-macro", version = "0.2.1" }
+marlin-veryl = { path = "language-support/veryl", version = "0.2.1" }
+marlin-veryl-macro = { path = "language-support/veryl-macro", version = "0.2.1" }
 
 [package]
 name = "marlin"
@@ -59,7 +65,6 @@ description.workspace = true
 repository.workspace = true
 readme.workspace = true
 license.workspace = true
-# include = ["README.md"]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -68,6 +73,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [features]
 verilog = []
 spade = []
+veryl = []
 
 [dependencies]
 marlin-verilator.workspace = true
@@ -76,3 +82,5 @@ marlin-verilog-macro.workspace = true
 marlin-verilog-macro-builder.workspace = true
 marlin-spade.workspace = true
 marlin-spade-macro.workspace = true
+marlin-veryl.workspace = true
+marlin-veryl-macro.workspace = true

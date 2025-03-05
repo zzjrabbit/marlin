@@ -1,5 +1,5 @@
 [package]
-name = "marlin-verilog-macro-builder"
+name = "example-veryl-project"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,13 +7,9 @@ rust-version.workspace = true
 description.workspace = true
 repository.workspace = true
 readme.workspace = true
-license.workspace = true
+license = "GPL-3.0"
 
 [dependencies]
-marlin-verilator.workspace = true
-
-proc-macro2.workspace = true
-syn.workspace = true
-quote.workspace = true
-
-sv-parser.workspace = true
+snafu.workspace = true
+colog.workspace = true
+marlin = { path = "../../", features = ["veryl"] }
