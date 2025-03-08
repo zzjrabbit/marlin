@@ -56,7 +56,7 @@ impl Default for SpadeRuntimeOptions {
     fn default() -> Self {
         Self {
             swim_executable: "swim".into(),
-            call_swim_build: true,
+            call_swim_build: false,
             verilator_options: VerilatorRuntimeOptions::default(),
         }
     }
@@ -80,6 +80,9 @@ pub struct SpadeRuntime {
 
 impl SpadeRuntime {
     /// Creates a new runtime for instantiating Spade units as Rust objects.
+    /// Does NOT call `swim build` by defaul because `swim build` is not
+    /// thread safe. You can enable this with [`SwimRuntimeOptions`] or just
+    /// run it beforehand.
     pub fn new(options: SpadeRuntimeOptions) -> Result<Self, Whatever> {
         if options.verilator_options.log {
             log::info!("Searching for swim project root");
