@@ -152,7 +152,7 @@ fn bind_dpi_if_needed(
         return Ok((None, false));
     }
 
-    let _dpi_file = dpi_artifact_directory.join("dpi.cpp");
+    let dpi_file_absolute_path = dpi_artifact_directory.join("dpi.cpp");
     // TODO: hard-coded knowledge, same verilator bug
     let dpi_file = Utf8PathBuf::from("../dpi/dpi.cpp");
 
@@ -213,7 +213,7 @@ extern \"C\" void {}({}) {{
     );
 
     // only rebuild if there's been a change
-    if fs::read_to_string(&dpi_file)
+    if fs::read_to_string(&dpi_file_absolute_path)
         .map(|current_file_code| current_file_code == file_code)
         .unwrap_or(false)
     {
@@ -230,7 +230,7 @@ extern \"C\" void {}({}) {{
     fs::write(dpi_artifact_directory.join("dpi.cpp"), file_code)
         .whatever_context(format!(
             "Failed to write DPI function wrapper code to {}",
-            dpi_file
+            dpi_file_absolute_path
         ))?;
 
     Ok((Some(dpi_file), true))
@@ -301,7 +301,8 @@ fn needs_verilator_rebuild(
 /// Next, the FFI wrappers are rebuilt (although we could probably be smarter
 /// about this and only rebuild if the module's source file was edited).
 ///
-/// Finally, we invoke `verilator` and return the library path.
+/// Finally, we invoke `verilator` and return the library path as well as
+/// whether the library was rebuilt.
 ///
 /// This function is not thread-safe; the `artifact_directory` must be guarded.
 #[allow(clippy::too_many_arguments)]
@@ -314,7 +315,8 @@ pub fn build_library(
     artifact_directory: &Utf8Path,
     options: &VerilatorRuntimeOptions,
     verbose: bool,
-) -> Result<Utf8PathBuf, Whatever> {
+    on_rebuild: impl FnOnce() -> Result<(), Whatever>,
+) -> Result<(Utf8PathBuf, bool), Whatever> {
     if verbose {
         log::info!("| Preparing artifacts directory");
     }
@@ -353,8 +355,10 @@ pub fn build_library(
                 "| Skipping rebuild of verilated model due to no changes"
             );
         }
-        return Ok(library_path);
+        return Ok((library_path, false));
     }
+
+    on_rebuild()?;
 
     let _ffi_wrappers = build_ffi(&ffi_artifact_directory, top_module, ports)
         .whatever_context("Failed to build FFI wrappers")?;
@@ -403,5 +407,5 @@ pub fn build_library(
         );
     }
 
-    Ok(library_path)
+    Ok((library_path, true))
 }
