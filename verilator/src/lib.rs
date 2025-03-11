@@ -187,9 +187,11 @@ macro_rules! eprintln_nocapture {
 struct ThreadLocalFileLock;
 
 /// The file_guard handles locking across processes, but does not guarantee
-/// locking between threads in one process.
-static THREAD_LOCK: LazyLock<DashMap<Utf8PathBuf, Mutex<ThreadLocalFileLock>>> =
-    LazyLock::new(DashMap::default);
+/// locking between threads in one process. Thus, we have this lock to
+/// synchronize threads for a given artifacts directoru.
+static THREAD_LOCKS_PER_BUILD_DIR: LazyLock<
+    DashMap<Utf8PathBuf, Mutex<ThreadLocalFileLock>>,
+> = LazyLock::new(DashMap::default);
 
 /* </Forgive me father for I have sinned> */
 
@@ -413,10 +415,43 @@ impl VerilatorRuntime {
                         local_artifacts_directory,
                     ))?;
 
-                eprintln_nocapture!(
-                    "{} waiting for file lock on build directory",
-                    "    Blocking".bold().cyan(),
-                )?;
+                //eprintln_nocapture!(
+                //    "on thread {:?}",
+                //    std::thread::current().id()
+                //)?;
+
+                if !THREAD_LOCKS_PER_BUILD_DIR
+                    .contains_key(&local_artifacts_directory)
+                {
+                    THREAD_LOCKS_PER_BUILD_DIR.insert(
+                        local_artifacts_directory.clone(),
+                        Default::default(),
+                    );
+                }
+                let thread_mutex = THREAD_LOCKS_PER_BUILD_DIR
+                    .get(&local_artifacts_directory)
+                    .expect("We just inserted if it didn't exist");
+
+                let _thread_lock = if let Ok(_thread_lock) =
+                    thread_mutex.try_lock()
+                {
+                    //eprintln_nocapture!(
+                    //    "thread-level try lock for {:?} succeeded",
+                    //    std::thread::current().id()
+                    //)?;
+                    _thread_lock
+                } else {
+                    eprintln_nocapture!(
+                        "{} waiting for file lock on build directory",
+                        "    Blocking".bold().cyan(),
+                    )?;
+                    let Ok(_thread_lock) = thread_mutex.lock() else {
+                        whatever!(
+                            "Failed to acquire thread-local lock for artifacts directory"
+                        );
+                    };
+                    _thread_lock
+                };
 
                 // # Safety
                 // build_library is not thread-safe, so we have to lock the
@@ -424,18 +459,18 @@ impl VerilatorRuntime {
                 if self.options.log {
                     log::info!("Acquiring file lock on artifact directory");
                 }
-                let file_lock = fs::OpenOptions::new()
+                let lockfile = fs::OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(true)
                 .truncate(true)
                 .open(self.artifact_directory.join(format!("{local_directory_name}.lock")))
                 .whatever_context(
-                    "Failed to open file lock file for artifacts directory (this is not the actual lock itself, it is an I/O error)",
+                    "Failed to open lockfile for artifacts directory (this is not the actual lock itself, it is an I/O error)",
                 )?;
 
                 let _file_lock = file_guard::lock(
-                    &file_lock,
+                    &lockfile,
                     file_guard::Lock::Exclusive,
                     0,
                     1,
@@ -443,15 +478,10 @@ impl VerilatorRuntime {
                 .whatever_context(
                     "Failed to acquire file lock for artifacts directory",
                 )?;
-
-                let thread_mutex = THREAD_LOCK
-                    .entry(local_artifacts_directory.clone())
-                    .or_default();
-                let Ok(_thread_lock) = thread_mutex.lock() else {
-                    whatever!(
-                        "Failed to acquire thread-local lock for artifacts directory"
-                    );
-                };
+                //eprintln_nocapture!(
+                //    "lockfile for {:?} succeeded",
+                //    std::thread::current().id()
+                //)?;
 
                 let start = Instant::now();
 
@@ -469,9 +499,10 @@ impl VerilatorRuntime {
                     self.options.log,
                     || {
                         eprintln_nocapture!(
-                            "{} {} ({})",
+                            "{} {}#{} ({})",
                             "   Compiling".bold().green(),
                             name,
+                            library_key.ports_hash,
                             source_path
                         )
                     },
