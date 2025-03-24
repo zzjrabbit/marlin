@@ -95,25 +95,19 @@ pub fn build_verilated_struct(
     let mut verilated_model_init_self = vec![];
 
     verilated_model_init_impl.push(quote! {
-        let new_model: extern "C" fn() -> *mut #crate_name::__reexports::libc::c_void =
+        let new_model: extern "C" fn() -> *mut std::ffi::c_void =
             *unsafe { library.get(concat!("ffi_new_V", #top_name).as_bytes()) }
                 .expect("failed to get symbol");
         let model = (new_model)();
 
-
-        let delete_model: extern "C" fn(*mut #crate_name::__reexports::libc::c_void) =
-            *unsafe { library.get(concat!("ffi_delete_V", #top_name).as_bytes()) }
-                .expect("failed to get symbol");
-
-        let eval_model: extern "C" fn(*mut #crate_name::__reexports::libc::c_void) =
+        let eval_model: extern "C" fn(*mut std::ffi::c_void) =
             *unsafe { library.get(concat!("ffi_V", #top_name, "_eval").as_bytes()) }
                 .expect("failed to get symbol");
     });
     verilated_model_init_self.push(quote! {
-        drop_model: delete_model,
         eval_model,
         model,
-        _phantom: std::marker::PhantomData
+        _marker: std::marker::PhantomData
     });
 
     for (port_name, port_msb, port_lsb, port_direction) in verilog_ports {
@@ -147,7 +141,14 @@ pub fn build_verilated_struct(
         };
 
         let port_name_ident = format_ident!("{}", port_name);
+        let port_documentation = syn::LitStr::new(
+            &format!(
+                "Corresponds to Verilog `{port_direction} {port_name}[{port_msb}:{port_lsb}]`."
+            ),
+            top_name.span(),
+        );
         struct_members.push(quote! {
+            #[doc = #port_documentation]
             pub #port_name_ident: #port_type
         });
         verilated_model_init_self.push(quote! {
@@ -158,8 +159,9 @@ pub fn build_verilated_struct(
             PortDirection::Input => {
                 let setter = format_ident!("pin_{}", port_name);
                 struct_members.push(quote! {
-                            #setter: extern "C" fn(*mut #crate_name::__reexports::libc::c_void, #port_type)
-                        });
+                    #[doc(hidden)]
+                    #setter: extern "C" fn(*mut std::ffi::c_void, #port_type)
+                });
                 preeval_impl.push(quote! {
                     (self.#setter)(self.model, self.#port_name_ident);
                 });
@@ -182,26 +184,27 @@ pub fn build_verilated_struct(
                 }
 
                 verilated_model_init_impl.push(quote! {
-                            let #setter: extern "C" fn(*mut #crate_name::__reexports::libc::c_void, #port_type) =
-                                *unsafe { library.get(concat!("ffi_V", #top_name, "_pin_", #port_name).as_bytes()) }
-                                    .expect("failed to get symbol");
-                        });
+                    let #setter: extern "C" fn(*mut std::ffi::c_void, #port_type) =
+                        *unsafe { library.get(concat!("ffi_V", #top_name, "_pin_", #port_name).as_bytes()) }
+                            .expect("failed to get symbol");
+                });
                 verilated_model_init_self.push(quote! { #setter });
             }
             PortDirection::Output => {
                 let getter = format_ident!("read_{}", port_name);
                 struct_members.push(quote! {
-                            #getter: extern "C" fn(*mut #crate_name::__reexports::libc::c_void) -> #port_type
-                        });
+                    #[doc(hidden)]
+                    #getter: extern "C" fn(*mut std::ffi::c_void) -> #port_type
+                });
                 posteval_impl.push(quote! {
                     self.#port_name_ident = (self.#getter)(self.model);
                 });
 
                 verilated_model_init_impl.push(quote! {
-                            let #getter: extern "C" fn(*mut #crate_name::__reexports::libc::c_void) -> #port_type =
-                                *unsafe { library.get(concat!("ffi_V", #top_name, "_read_", #port_name).as_bytes()) }
-                                    .expect("failed to get symbol");
-                        });
+                    let #getter: extern "C" fn(*mut std::ffi::c_void) -> #port_type =
+                        *unsafe { library.get(concat!("ffi_V", #top_name, "_read_", #port_name).as_bytes()) }
+                            .expect("failed to get symbol");
+                });
                 verilated_model_init_self.push(quote! { #getter });
             }
             _ => todo!("Unhandled port direction"),
@@ -223,8 +226,8 @@ pub fn build_verilated_struct(
     }
 
     struct_members.push(quote! {
-        drop_model: extern "C" fn(*mut #crate_name::__reexports::libc::c_void),
-        eval_model: extern "C" fn(*mut #crate_name::__reexports::libc::c_void)
+        #[doc(hidden)]
+        eval_model: extern "C" fn(*mut std::ffi::c_void)
     });
 
     let struct_name = item.ident;
@@ -232,30 +235,55 @@ pub fn build_verilated_struct(
     let port_count = verilated_model_ports_impl.len();
     quote! {
         #vis struct #struct_name<'ctx> {
+            #[doc(hidden)]
+            vcd_api: Option<#crate_name::__reexports::verilator::vcd::__private::VcdApi>,
+            #[doc(hidden)]
+            opened_vcd: bool,
             #(#struct_members),*,
             #[doc = "# Safety\nThe Rust binding to the model will not outlive the dynamic library context (with lifetime `'ctx`) and is dropped when this struct is."]
-            model: *mut #crate_name::__reexports::libc::c_void,
-            _phantom: std::marker::PhantomData<&'ctx ()>
+            #[doc(hidden)]
+            model: *mut std::ffi::c_void,
+            #[doc(hidden)]
+            _marker: std::marker::PhantomData<&'ctx ()>,
+            #[doc(hidden)]
+            _unsend_unsync: std::marker::PhantomData<(std::cell::Cell<()>, std::sync::MutexGuard<'static, ()>)>
         }
 
-        impl #struct_name<'_> {
+        impl<'ctx> #struct_name<'ctx> {
             pub fn eval(&mut self) {
                 #(#preeval_impl)*
                 (self.eval_model)(self.model);
                 #(#posteval_impl)*
             }
 
+            pub fn open_vcd(
+                &mut self,
+                path: impl std::convert::AsRef<std::path::Path>,
+            ) -> #crate_name::__reexports::verilator::vcd::Vcd<'ctx> {
+                let path = path.as_ref();
+                if let Some(vcd_api) = &self.vcd_api {
+                    if self.opened_vcd {
+                        panic!("Verilator does not support opening multiple VCD traces (see issue #5813). You can instead split the already-opened VCD.");
+                    }
+                    let c_path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).expect("Failed to convert provided VCD path to C string");
+                    let vcd_ptr = (vcd_api.open_trace)(self.model, c_path.as_ptr());
+                    self.opened_vcd = true;
+                    #crate_name::__reexports::verilator::vcd::__private::new_vcd(
+                        vcd_ptr,
+                        vcd_api.dump,
+                        vcd_api.open_next,
+                        vcd_api.flush,
+                        vcd_api.close_and_delete
+                    )
+                } else {
+                    #crate_name::__reexports::verilator::vcd::__private::new_vcd_useless()
+                }
+            }
+
             #(#other_impl)*
         }
 
-        impl<'ctx> std::ops::Drop for #struct_name<'ctx> {
-            fn drop(&mut self) {
-                (self.drop_model)(self.model);
-                self.model = std::ptr::null_mut();
-            }
-        }
-
-        impl<'ctx> #crate_name::__reexports::verilator::VerilatedModel for #struct_name<'ctx> {
+        impl<'ctx> #crate_name::__reexports::verilator::VerilatedModel<'ctx> for #struct_name<'ctx> {
             fn name() -> &'static str {
                 #top_name
             }
@@ -269,11 +297,38 @@ pub fn build_verilated_struct(
                 &PORTS
             }
 
-            fn init_from(library: &#crate_name::__reexports::libloading::Library) -> Self {
+            fn init_from(library: &'ctx #crate_name::__reexports::libloading::Library, tracing_enabled: bool) -> Self {
                 #(#verilated_model_init_impl)*
+
+                let vcd_api =
+                    if tracing_enabled {
+                        use #crate_name::__reexports::verilator::vcd::__private::VcdApi;
+
+                        let open_trace: extern "C" fn(*mut std::ffi::c_void, *const std::ffi::c_char) -> *mut std::ffi::c_void =
+                            *unsafe { library.get(concat!("ffi_V", #top_name, "_open_trace").as_bytes()).expect("failed to get open_trace symbol") };
+                        let dump: extern "C" fn(*mut std::ffi::c_void, u64) =
+                            *unsafe { library.get(b"ffi_VerilatedVcdC_dump").expect("failed to get dump symbol") };
+                        let open_next: extern "C" fn(*mut std::ffi::c_void, bool) =
+                            *unsafe { library.get(b"ffi_VerilatedVcdC_open_next").expect("failed to get open_next symbol") };
+                        let flush: extern "C" fn(*mut std::ffi::c_void) =
+                            *unsafe { library.get(b"ffi_VerilatedVcdC_flush").expect("failed to get flush symbol") };
+                        let close_and_delete: extern "C" fn(*mut std::ffi::c_void) =
+                            *unsafe { library.get(b"ffi_VerilatedVcdC_close_and_delete").expect("failed to get close_and_delete symbol") };
+                        Some(VcdApi { open_trace, dump, open_next, flush, close_and_delete })
+                    } else {
+                        None
+                    };
+
                 Self {
-                    #(#verilated_model_init_self),*
+                    vcd_api,
+                    opened_vcd: false,
+                    #(#verilated_model_init_self),*,
+                    _unsend_unsync: std::marker::PhantomData
                 }
+            }
+
+            unsafe fn model(&self) -> *mut std::ffi::c_void {
+                self.model
             }
         }
     }

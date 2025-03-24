@@ -43,7 +43,7 @@ fn main_tutorial() -> Result<(), Whatever> {
         VerilatorRuntimeOptions::default_logging(),
     )?;
 
-    let mut main = runtime.create_model::<DpiMain>()?;
+    let mut main = runtime.create_model_simple::<DpiMain>()?;
     main.eval();
 
     assert_eq!(main.out, SET_OUT_TO as u32);
@@ -80,7 +80,7 @@ fn other_test() -> Result<(), Whatever> {
         VerilatorRuntimeOptions::default_logging(),
     )?;
 
-    let mut main = runtime.create_model::<MoreDpiMain>()?;
+    let mut main = runtime.create_model_simple::<MoreDpiMain>()?;
     main.eval();
 
     assert_eq!(main.int_out, SET_UNSIGNED_INT_OUT_TO);

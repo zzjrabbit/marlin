@@ -6,6 +6,8 @@
 
 //! See the [`#[verilog::dpi]`](https://docs.rs/marlin/latest/marlin/verilog/attr.dpi.html) macro for details.
 
+use std::ffi;
+
 /// A `&'static dyn DpiFunction` represents a Rust function suitable for use in
 /// Verilator DPI. See the [`#[verilog::dpi]`](https://docs.rs/marlin/latest/marlin/verilog/attr.dpi.html)
 /// macro for details.
@@ -21,5 +23,5 @@ pub trait DpiFunction: Sync {
     fn signature(&self) -> &'static [(&'static str, &'static str)];
 
     /// The Rust function as a function pointer.
-    fn pointer(&self) -> *const libc::c_void;
+    fn pointer(&self) -> *const ffi::c_void;
 }

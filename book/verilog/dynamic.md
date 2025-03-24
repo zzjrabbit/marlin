@@ -84,10 +84,10 @@ vi tests/dynamic_test.rs
 // file: tests/simple_test.rs
 use snafu::Whatever;
 use marlin::verilator::{
-    PortDirection, VerilatorRuntime, VerilatorRuntimeOptions,
+    PortDirection, VerilatorRuntime, VerilatorRuntimeOptions, VerilatedModelConfig
 };
 
-#[snafu::report]
+//#[snafu::report]
 fn main() -> Result<(), Whatever> {
     let runtime = VerilatorRuntime::new(
         "build2".into(),
@@ -104,6 +104,7 @@ fn main() -> Result<(), Whatever> {
             ("medium_input", 31, 0, PortDirection::Input),
             ("medium_output", 31, 0, PortDirection::Output),
         ],
+        VerilatedModelConfig::default(),
     )?;
 
     main.pin("medium_input", u32::MAX).whatever_context("pin")?;
@@ -122,6 +123,12 @@ fn main() -> Result<(), Whatever> {
     Ok(())
 }
 ```
+
+> [!CAUTION]
+> Using `#[snafu::report]` on the function gives error messages that are
+> actually useful, but sometimes breaks LSP services like code completion.
+> I recommend to only apply it to your test functions when you actually
+> encounter an error.
 
 We can `cargo test` as usual to test.
 If you're using `git`, remember to add `build2/` to your `.gitignore`.
