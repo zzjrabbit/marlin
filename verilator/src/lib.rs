@@ -14,6 +14,7 @@
 
 use std::{
     cell::RefCell,
+    collections::{HashMap, hash_map::Entry},
     ffi::{self, OsString},
     fmt, fs,
     hash::{self, Hash, Hasher},
@@ -26,7 +27,7 @@ use std::{
 use boxcar::Vec as BoxcarVec;
 use build_library::build_library;
 use camino::{Utf8Path, Utf8PathBuf};
-use dashmap::{DashMap, Entry};
+use dashmap::DashMap;
 use dpi::DpiFunction;
 use dynamic::DynamicVerilatedModel;
 use libloading::Library;
@@ -37,6 +38,8 @@ mod build_library;
 pub mod dpi;
 pub mod dynamic;
 pub mod vcd;
+
+pub use dynamic::AsDynamicVerilatedModel;
 
 /// Verilator-defined types for C FFI.
 pub mod types {
@@ -102,7 +105,7 @@ pub struct VerilatedModelConfig {
 
 /// You should not implement this `trait` manually. Instead, use a procedural
 /// macro like `#[verilog(...)]` to derive it for you.
-pub trait VerilatedModel<'ctx>: 'ctx {
+pub trait AsVerilatedModel<'ctx>: 'ctx {
     /// The source-level name of the module.
     fn name() -> &'static str;
 
@@ -112,8 +115,7 @@ pub trait VerilatedModel<'ctx>: 'ctx {
     /// The module's interface.
     fn ports() -> &'static [(&'static str, usize, usize, PortDirection)];
 
-    /// Use [`VerilatorRuntime::create_model`] or similar function for another
-    /// runtime.
+    #[doc(hidden)]
     fn init_from(library: &'ctx Library, tracing_enabled: bool) -> Self;
 
     #[doc(hidden)]
@@ -173,7 +175,7 @@ pub struct VerilatorRuntime {
     options: VerilatorRuntimeOptions,
     /// Mapping between hardware (top, path) and arena index of Verilator
     /// implementations
-    library_map: DashMap<LibraryArenaKey, usize>,
+    library_map: RefCell<HashMap<LibraryArenaKey, usize>>,
     /// Verilator implementations arena
     library_arena: BoxcarVec<Library>,
     /// SAFETY: These are dropped when the runtime is dropped. They will not be
@@ -300,7 +302,7 @@ impl VerilatorRuntime {
                 .collect(),
             dpi_functions: dpi_functions.into_iter().collect(),
             options,
-            library_map: DashMap::new(),
+            library_map: RefCell::new(HashMap::new()),
             library_arena: BoxcarVec::new(),
             model_deallocators: RefCell::new(vec![]),
         })
@@ -310,7 +312,7 @@ impl VerilatorRuntime {
     /// efficiency.
     ///
     /// See also: [`VerilatorRuntime::create_dyn_model`]
-    pub fn create_model_simple<'ctx, M: VerilatedModel<'ctx>>(
+    pub fn create_model_simple<'ctx, M: AsVerilatedModel<'ctx>>(
         &'ctx self,
     ) -> Result<M, Whatever> {
         self.create_model(&VerilatedModelConfig::default())
@@ -320,7 +322,7 @@ impl VerilatorRuntime {
     /// efficiency.
     ///
     /// See also: [`VerilatorRuntime::create_dyn_model`]
-    pub fn create_model<'ctx, M: VerilatedModel<'ctx>>(
+    pub fn create_model<'ctx, M: AsVerilatedModel<'ctx>>(
         &'ctx self,
         config: &VerilatedModelConfig,
     ) -> Result<M, Whatever> {
@@ -518,7 +520,11 @@ impl VerilatorRuntime {
             hash: hasher.finish(),
         };
 
-        let library_idx = match self.library_map.entry(library_key.clone()) {
+        let library_idx = match self
+            .library_map
+            .borrow_mut()
+            .entry(library_key.clone())
+        {
             Entry::Occupied(entry) => *entry.get(),
             Entry::Vacant(entry) => {
                 let local_directory_name = format!(
