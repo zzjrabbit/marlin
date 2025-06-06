@@ -87,8 +87,21 @@ impl fmt::Display for PortDirection {
     }
 }
 
+/// Based off of the [C++ standards supported by GCC](https://gcc.gnu.org/projects/cxx-status.html) as
+/// of June 6th, 2025.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CxxStandard {
+    Cxx98,
+    Cxx11,
+    Cxx14,
+    Cxx17,
+    Cxx20,
+    Cxx23,
+    Cxx26,
+}
+
 /// Configuration for a particular [`VerilatedModel`].
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VerilatedModelConfig {
     /// If `None`, there will be no optimization. If a value from `0` to `3`
     /// inclusive, the flag `-O<level>` will be passed. Enabling will slow
@@ -101,6 +114,20 @@ pub struct VerilatedModelConfig {
 
     /// Whether this model should be compiled with tracing support.
     pub enable_tracing: bool,
+
+    /// Optionally specify the C++ standard used by Verilator.
+    pub cxx_standard: Option<CxxStandard>,
+}
+
+impl Default for VerilatedModelConfig {
+    fn default() -> Self {
+        Self {
+            verilator_optimization: Default::default(),
+            ignored_warnings: Default::default(),
+            enable_tracing: Default::default(),
+            cxx_standard: Some(CxxStandard::Cxx14),
+        }
+    }
 }
 
 /// You should not implement this `trait` manually. Instead, use a procedural
