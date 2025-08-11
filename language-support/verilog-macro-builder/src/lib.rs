@@ -182,8 +182,16 @@ pub fn build_verilated_struct(
                     }
                 }
 
-                if let Some(_reset_port) = &reset_port {
-                    todo!("reset ports");
+                if let Some(reset_port) = &reset_port {
+                    if reset_port.value().as_str() == port_name {
+                        other_impl.push(quote! {
+			    pub fn reset(&mut self) {
+			        self.#port_name_ident = 1 as _;
+                                self.tick();
+                                self.#port_name_ident = 0 as _;
+                            }
+			});
+		    }
                 }
 
                 verilated_model_init_impl.push(quote! {
