@@ -225,23 +225,23 @@ extern \"C\" void dpi_init_callback(void** callbacks) {{
             .iter()
             .map(|dpi_function| {
                 let name = dpi_function.name();
-                let signature = dpi_function
-                    .signature()
+                let parameters = dpi_function
+                    .parameters()
                     .iter()
                     .map(|(name, ty)| format!("{ty} {name}"))
                     .collect::<Vec<_>>()
                     .join(", ");
                 let arguments = dpi_function
-                    .signature()
+                    .parameters()
                     .iter()
                     .map(|(name, _)| name.to_owned())
                     .collect::<Vec<_>>()
                     .join(",");
-                let return_type = dpi_function.return_type;
+                let return_type = dpi_function.return_type();
 
                 format!(
-                    "static {return_type} (*rust_{name})({signature});
-extern \"C\" {return_type} {name}({signature}) {{
+                    "static {return_type} (*rust_{name})({parameters});
+extern \"C\" {return_type} {name}({parameters}) {{
     rust_{name}({arguments});
 }}"
                 )
@@ -252,8 +252,8 @@ extern \"C\" {return_type} {name}({signature}) {{
             .iter()
             .enumerate()
             .map(|(i, dpi_function)| {
-                let signature = dpi_function
-                    .signature()
+                let parameters = dpi_function
+                    .parameters()
                     .iter()
                     .map(|(name, ty)| format!("{ty} {name}"))
                     .collect::<Vec<_>>()
@@ -262,7 +262,7 @@ extern \"C\" {return_type} {name}({signature}) {{
                     "   rust_{} = ( {}(*)({}) ) callbacks[{}];",
                     dpi_function.name(),
                     dpi_function.return_type(),
-                    signature,
+                    parameters,
                     i
                 )
             })
