@@ -387,7 +387,7 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
 
         impl #struct_name {
             #(#attributes)*
-            pub extern "C" fn call(#(#parameters),*) -> #(#return_type)? {
+            pub extern "C" fn call(#(#parameters),*) #( -> #return_type)? {
                 #(#preamble)*
                 #body
             }
