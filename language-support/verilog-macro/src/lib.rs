@@ -407,7 +407,7 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn pointer(&self) -> *const std::ffi::c_void {
-                #struct_name::call as extern "C" fn(#(#parameter_types),*) as *const std::ffi::c_void
+                #struct_name::call as extern "C" fn(#(#parameter_types),*) #( -> #return_type)? as *const std::ffi::c_void
             }
         }
 
