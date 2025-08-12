@@ -268,7 +268,7 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let (dpi_return_type, return_type) = if let syn::ReturnType::Type(_, return_type) = &item_fn.sig.output {
-        let dpi_return_type = match return_type {
+        let dpi_return_type = match &return_type {
             syn::Type::Path(type_path) => {
                 let Ok(dpi_return_type) = parse_dpi_primitive_type(type_path) else {
                     return syn::Error::new_spanned(
@@ -283,8 +283,10 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
             _ => return syn::Error::new_spanned(
                 return_type,
                 "Invalid return type for DPI function",
-            ),
-        }
+            )
+            .into_compile_error()   
+            .into(),
+        };
 
         (dpi_return_type, Some(return_type))
     } else {
