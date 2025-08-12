@@ -242,7 +242,7 @@ extern \"C\" void dpi_init_callback(void** callbacks) {{
                 format!(
                     "static {return_type} (*rust_{name})({parameters});
 extern \"C\" {return_type} {name}({parameters}) {{
-    rust_{name}({arguments});
+    return rust_{name}({arguments});
 }}"
                 )
             })
