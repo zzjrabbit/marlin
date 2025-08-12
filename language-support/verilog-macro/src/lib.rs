@@ -56,6 +56,7 @@ enum DPIPrimitiveType {
     I16,
     I32,
     I64,
+    Void,
 }
 
 impl fmt::Display for DPIPrimitiveType {
@@ -70,6 +71,7 @@ impl fmt::Display for DPIPrimitiveType {
             DPIPrimitiveType::I16 => "i16",
             DPIPrimitiveType::I32 => "i32",
             DPIPrimitiveType::I64 => "i64",
+            DPIPrimitiveType::Void => "()",
         }
         .fmt(f)
     }
@@ -87,6 +89,7 @@ impl DPIPrimitiveType {
             DPIPrimitiveType::I16 => "int16_t",
             DPIPrimitiveType::I32 => "int32_t",
             DPIPrimitiveType::I64 => "int64_t",
+            DPIPrimitiveType::Void => "void",
         }
     }
 }
@@ -264,14 +267,12 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
         .into();
     }
 
-    if let syn::ReturnType::Type(_, return_type) = &item_fn.sig.output {
-        return syn::Error::new_spanned(
-            return_type,
-            "DPI functions cannot have a return value",
-        )
-        .into_compile_error()
-        .into();
-    }
+    let (dpi_return_type, return_type) = if let syn::ReturnType::Type(_, return_type) = &item_fn.sig.output {
+        (parse_dpi_primitive_type(&return_type)?, Some(return_type))
+    } else {
+        (DPIPrimitiveType::Void, None)
+    };
+    let c_return_type = dpi_return_type.as_c().to_string();
 
     let ports =
         match item_fn
@@ -366,7 +367,7 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
 
         impl #struct_name {
             #(#attributes)*
-            pub extern "C" fn call(#(#parameters),*) {
+            pub extern "C" fn call(#(#parameters),*) #(#return_type)? {
                 #(#preamble)*
                 #body
             }
@@ -377,8 +378,12 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
                 #function_name_literal
             }
 
-            fn signature(&self) -> &'static [(&'static str, &'static str)] {
+            fn parameters(&self) -> &'static [(&'static str, &'static str)] {
                 &[#(#c_signature),*]
+            }
+
+            fn return_type(&self) -> &'static str {
+                #c_return_type
             }
 
             fn pointer(&self) -> *const std::ffi::c_void {

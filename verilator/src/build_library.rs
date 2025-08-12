@@ -237,9 +237,11 @@ extern \"C\" void dpi_init_callback(void** callbacks) {{
                     .map(|(name, _)| name.to_owned())
                     .collect::<Vec<_>>()
                     .join(",");
+                let return_type = dpi_function.return_type;
+
                 format!(
-                    "static void (*rust_{name})({signature});
-extern \"C\" void {name}({signature}) {{
+                    "static {return_type} (*rust_{name})({signature});
+extern \"C\" {return_type} {name}({signature}) {{
     rust_{name}({arguments});
 }}"
                 )
@@ -257,8 +259,9 @@ extern \"C\" void {name}({signature}) {{
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "   rust_{} = ( void(*)({}) ) callbacks[{}];",
+                    "   rust_{} = ( {}(*)({}) ) callbacks[{}];",
                     dpi_function.name(),
+                    dpi_function.return_type(),
                     signature,
                     i
                 )

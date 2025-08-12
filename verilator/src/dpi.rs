@@ -17,10 +17,12 @@ pub trait DpiFunction: Sync {
     /// source code.
     fn name(&self) -> &'static str;
 
+    fn return_type(&self) -> &'static str;
+
     /// A list of `(name, c_type)` pairs serving as the parameters of the
     /// generated C function and the generated function pointer type for the
     /// Rust function.
-    fn signature(&self) -> &'static [(&'static str, &'static str)];
+    fn parameters(&self) -> &'static [(&'static str, &'static str)];
 
     /// The Rust function as a function pointer.
     fn pointer(&self) -> *const ffi::c_void;
