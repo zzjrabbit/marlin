@@ -381,13 +381,19 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
+    let expanded_return_type = if let Some(return_type) = return_type {
+        quote!{ -> #return_type }
+    } else {
+        quote!{}
+    };
+
     quote! {
         #[allow(non_camel_case_types)]
         struct #struct_name;
 
         impl #struct_name {
             #(#attributes)*
-            pub extern "C" fn call(#(#parameters),*) #( -> #return_type)? {
+            pub extern "C" fn call(#(#parameters),*) #expanded_return_type {
                 #(#preamble)*
                 #body
             }
@@ -407,7 +413,7 @@ pub fn dpi(_args: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn pointer(&self) -> *const std::ffi::c_void {
-                #struct_name::call as extern "C" fn(#(#parameter_types),*) #( -> #return_type)? as *const std::ffi::c_void
+                #struct_name::call as extern "C" fn(#(#parameter_types),*) #expanded_return_type as *const std::ffi::c_void
             }
         }
 
