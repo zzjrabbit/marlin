@@ -106,10 +106,18 @@ pub fn build_verilated_struct(
         let eval_model: extern "C" fn(*mut std::ffi::c_void) =
             *unsafe { library.get(concat!("ffi_V", #top_name, "_eval").as_bytes()) }
                 .expect("failed to get symbol");
+
+        let set_dpi_scope: extern "C" fn() =
+            *unsafe { library.get(b"ffi_dpi_scope") }
+                .expect("failed to get dpi scope symbol");
+
+        // Set the DPI scope for exported functions
+        (set_dpi_scope)();
     });
     verilated_model_init_self.push(quote! {
         eval_model,
         model,
+        library,
         _marker: std::marker::PhantomData
     });
 
@@ -277,6 +285,8 @@ pub fn build_verilated_struct(
             #[doc(hidden)]
             model: *mut std::ffi::c_void,
             #[doc(hidden)]
+            library: &'ctx #crate_name::__reexports::libloading::Library,
+            #[doc(hidden)]
             _marker: std::marker::PhantomData<&'ctx ()>,
             #[doc(hidden)]
             _unsend_unsync: std::marker::PhantomData<(std::cell::Cell<()>, std::sync::MutexGuard<'static, ()>)>
@@ -312,6 +322,18 @@ pub fn build_verilated_struct(
                 } else {
                     #crate_name::__reexports::verilator::vcd::__private::new_vcd_useless()
                 }
+            }
+
+            /// Get a DPI export function from the model's dynamic library.
+            /// This allows calling Verilog functions that are exported via DPI-C from Rust.
+            ///
+            /// # Safety
+            ///
+            /// The function signature must match exactly between the Verilog export 
+            /// and the Rust function type T. This function performs no type checking.
+            pub unsafe fn get_dpi_export<T: Copy>(&self, function_name: &str) -> Result<T, Box<dyn std::error::Error>> {
+                let symbol = unsafe { self.library.get::<T>(function_name.as_bytes()) }?;
+                Ok(*symbol)
             }
 
             #(#other_impl)*

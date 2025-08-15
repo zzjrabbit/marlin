@@ -100,6 +100,13 @@ extern "C" {{
     void ffi_delete_V{top_module}(V{top_module}* top) {{
         delete top;
     }}
+
+    void ffi_dpi_scope() {{
+        const svScope scope = svGetScopeFromName("TOP.{top_module}");
+        if (scope) {{
+            svSetScope(scope);
+        }}
+    }}
 "#
     )
     .whatever_context("Failed to format utility FFI")?;
