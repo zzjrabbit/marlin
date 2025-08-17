@@ -205,7 +205,7 @@ impl SpadeRuntime {
                 &swim_project_path.join("build/thirdparty/marlin"),
                 &source_files,
                 &include_files,
-                dpi_function,
+                dpi_functions,
                 options.verilator_options,
             )?,
         })
