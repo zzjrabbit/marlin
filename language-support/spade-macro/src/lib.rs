@@ -233,9 +233,12 @@ fn spade_simple_type_width(type_spec: &spade_ast::TypeSpec) -> usize {
                     }
                     get_constant(&args.as_ref().unwrap().inner[0])
                 }
-		"bool" => 1,
-		"clock" => 1,
-                _ => panic!("I DONT WANT TO WRITE ERROR MESSAGES {}", name.inner.0[0].inner.0.as_str()),
+                "bool" => 1,
+                "clock" => 1,
+                _ => panic!(
+                    "I DONT WANT TO WRITE ERROR MESSAGES {}",
+                    name.inner.0[0].inner.0.as_str()
+                ),
             }
         }
         spade_ast::TypeSpec::Array { inner, size } => {

@@ -11,7 +11,7 @@ use std::{env::current_dir, ffi::OsString, fs, process::Command};
 use camino::{Utf8Path, Utf8PathBuf};
 use marlin_verilator::{
     AsVerilatedModel, VerilatedModelConfig, VerilatorRuntime,
-    VerilatorRuntimeOptions,
+    VerilatorRuntimeOptions, dpi::DpiFunction,
 };
 use snafu::{ResultExt, Whatever, whatever};
 
@@ -92,7 +92,10 @@ impl SpadeRuntime {
     /// Does NOT call `swim build` by defaul because `swim build` is not
     /// thread safe. You can enable this with [`SwimRuntimeOptions`] or just
     /// run it beforehand.
-    pub fn new(options: SpadeRuntimeOptions) -> Result<Self, Whatever> {
+    pub fn new(
+        options: SpadeRuntimeOptions,
+        dpi_functions: impl IntoIterator<Item = &'static dyn DpiFunction>,
+    ) -> Result<Self, Whatever> {
         if options.verilator_options.log {
             log::info!("Searching for swim project root");
         }
@@ -202,7 +205,7 @@ impl SpadeRuntime {
                 &swim_project_path.join("build/thirdparty/marlin"),
                 &source_files,
                 &include_files,
-                [],
+                dpi_function,
                 options.verilator_options,
             )?,
         })

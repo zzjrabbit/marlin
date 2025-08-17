@@ -329,7 +329,7 @@ pub fn build_verilated_struct(
             ///
             /// # Safety
             ///
-            /// The function signature must match exactly between the Verilog export 
+            /// The function signature must match exactly between the Verilog export
             /// and the Rust function type T. This function performs no type checking.
             pub unsafe fn get_dpi_export<T: Copy>(&self, function_name: &str) -> Result<T, Box<dyn std::error::Error>> {
                 let symbol = unsafe { self.library.get::<T>(function_name.as_bytes()) }?;
